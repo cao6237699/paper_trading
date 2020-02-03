@@ -46,7 +46,22 @@ class Account(BaseData):
     assets: float = 0        # 总资产
     available: float = 0     # 可用资金
     market_value: float = 0  # 总市值
+    captial: float = 0       # 初始资金
+    cost: float = 0          # 佣金
+    tax: float = 0           # 税金
+    slipping: float = 0      # 滑点
     account_info: str = ""   # 账户描述信息
+
+
+@dataclass
+class AccountRecord(BaseData):
+    """账户数据记录"""
+    account_id: str          # 账户编号
+    check_date: str          # 检查点日期
+    assets: float = 0        # 总资产
+    available: float = 0     # 可用资金
+    market_value: float = 0  # 总市值
+
 
 
 @dataclass

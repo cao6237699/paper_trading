@@ -7,10 +7,18 @@ class EngineMode(Enum):
     SIMULATION = "simulation"
 
 
+class ConfigType(Enum):
+    """app配置类型"""
+    DEFAULT = "default"
+    TRADING = "trading"
+    TESTING = "testing"
+
 class OrderType(Enum):
     """订单类型"""
     BUY = "buy"
     SELL = "sell"
+    CANCEL = "cancel"
+    LIQ = "liquidation"
 
 
 class TradeType(Enum):

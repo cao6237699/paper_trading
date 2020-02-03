@@ -1,91 +1,77 @@
 
+import numpy as np
+import pandas as pd
 
-def calculate_result(self):
+from paper_trading.utility.setting import SETTINGS
+from paper_trading.utility.constant import Status, OrderType
+from paper_trading.utility.model import DBData, AccountRecord
+
+
+def calculate_result(token, db, start: str = None, end: str = None):
     """计算结果"""
-    self.write_log("开始计算逐日盯市盈亏")
+    # 查询账户信息
+    raw_data = {}
+    raw_data['flt'] = {"account_id": token}
+    db_data = DBData(
+        db_name=SETTINGS['ACCOUNT_DB'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    account = db.on_query_one(db_data)
 
-    if not self.trades:
-        self.write_log("成交记录为空，无法计算")
-        return
+    if not account:
+        return False
+
+    captial = account['captial']
+    cost = account['cost']
+    tax = account['tax']
+    slipping = account['slipping']
 
     # 资产表
-    self.assets_df = self.get_account_data()
+    account_df = load_account_record(token, db, captial, start, end)
+
     # 持仓表
-    self.pos_df = self.get_pos_data()
+    pos_df = load_pos(token, db)
+
     # 交易表
-    self.trade_df = self.get_trade_data()
-    self.write_log("逐日盯市盈亏计算完成")
+    trade_df = load_trade_record(token, db, cost, tax, start, end)
 
+    return captial, account_df, pos_df, trade_df
 
-def trade_statistics(self):
+def trade_statistics(captial, assets_df, pos_df, trade_df):
     """交易结果分析"""
-    self.write_log("开始分析策略统计指标")
+    # 初始资金
 
-    if not self.trades:
-        self.write_log("成交记录为空，无法计算")
-        return
+    start_date = assets_df.iloc[0]['check_date']
+    end_date = assets_df.iloc[-1]['check_date']
 
-    start_date = self.trade_date[0]
-    end_date = self.trade_date[-1]
+    total_days = len(assets_df)
+    profit_days = len(assets_df[assets_df["net_pnl"] > 0])
+    loss_days = len(assets_df[assets_df["net_pnl"] < 0])
 
-    total_days = len(self.trade_date)
-    profit_days = len(self.assets_df[self.assets_df["net_pnl"] > 0])
-    loss_days = len(self.assets_df[self.assets_df["net_pnl"] < 0])
+    end_balance = float(assets_df.iloc[-1].assets)
+    max_drawdown = round((assets_df['assets'].max() - assets_df['assets'].min()), 2)
+    max_ddpercent = round((max_drawdown / assets_df['assets'].max()) * 100, 2)
 
-    end_balance = self.account_dict[self.trade_date[-1]].assets
-    max_drawdown = self.assets_df['assets'].max() - self.assets_df['assets'].min()
-    max_ddpercent = 0
-
-    total_net_pnl = end_balance - self.capital
-    total_commission = self.trade_df['commission'].sum()
+    total_net_pnl = round((end_balance - captial), 2)
+    total_commission = float(trade_df['commission'].sum())
     total_slippage = 0
-    total_turnover = self.trade_df['turnover'].sum()
-    total_trade_count = len(self.trade_df)
+    total_turnover = float(trade_df['volume'].sum())
+    total_trade_count = len(trade_df)
 
-    win_num = len(self.pos_df[self.pos_df.pnl > 0])
-    loss_num = len(self.pos_df[self.pos_df.pnl <= 0])
-    win_rate = win_num / (win_num + loss_num) * 100
+    win_num = len(pos_df[pos_df.profit > 0])
+    loss_num = len(pos_df[pos_df.profit <= 0])
+    win_rate = round((win_num / (win_num + loss_num) * 100), 2)
 
-    total_return = (end_balance / self.capital - 1) * 100
-    annual_return = total_return / total_days * 240
-    return_mean = self.pos_df['pnl'].mean()
-    return_std = self.pos_df['pnl'].std()
+    total_return = round(((end_balance / captial - 1) * 100), 2)
+    annual_return = round((total_return / total_days * 240), 2)
+    return_mean = pos_df['profit'].mean()
+    return_std = pos_df['profit'].std()
 
     if return_std:
-        sharpe_ratio = return_mean / return_std * np.sqrt(240)
+        sharpe_ratio = float(return_mean / return_std * np.sqrt(240))
     else:
         sharpe_ratio = 0
-
-    # Output
-    self.output("-" * 30)
-    self.output(f"首个交易日：\t{start_date}")
-    self.output(f"最后交易日：\t{end_date}")
-
-    self.output(f"总交易日：\t{total_days}")
-    self.output(f"盈利交易日：\t{profit_days}")
-    self.output(f"亏损交易日：\t{loss_days}")
-
-    self.output(f"起始资金：\t{self.capital:,.2f}")
-    self.output(f"结束资金：\t{end_balance:,.2f}")
-
-    self.output(f"总收益率：\t{total_return:,.2f}%")
-    self.output(f"年化收益：\t{annual_return:,.2f}%")
-    self.output(f"最大回撤: \t{max_drawdown:,.2f}")
-    self.output(f"百分比最大回撤: {max_ddpercent:,.2f}%")
-
-    self.output(f"总盈亏：\t{total_net_pnl:,.2f}")
-    self.output(f"总手续费：\t{total_commission:,.2f}")
-    self.output(f"总滑点：\t{total_slippage:,.2f}")
-    self.output(f"总成交金额：\t{total_turnover:,.2f}")
-    self.output(f"总成交笔数：\t{total_trade_count}")
-
-    self.output(f"盈利个股数量：\t{win_num:,.2f}")
-    self.output(f"亏损个股数量：\t{loss_num:,.2f}")
-    self.output(f"胜率：\t{win_rate:,.2f}%")
-
-    self.output(f"平均收益率：\t{return_mean:,.2f}%")
-    self.output(f"收益标准差：\t{return_std:,.2f}%")
-    self.output(f"Sharpe Ratio：\t{sharpe_ratio:,.2f}")
 
     statistics = {
         "start_date": start_date,
@@ -93,6 +79,7 @@ def trade_statistics(self):
         "total_days": total_days,
         "profit_days": profit_days,
         "loss_days": loss_days,
+        "captial": captial,
         "end_balance": end_balance,
         "max_drawdown": max_drawdown,
         "max_ddpercent": max_ddpercent,
@@ -111,10 +98,11 @@ def trade_statistics(self):
         "sharpe_ratio": sharpe_ratio,
     }
 
+    return statistics
 
-def trade_record(self):
+def trade_record(trade_df):
     """交易记录"""
-    for i, trade in self.trades.items():
+    for i, trade in trade_df.iterrows():
         print("订单编号：{}, 成交编号：{}, 交易日期：{}, 交易时间：{}, 证券代码：{}, 订单类型：{}, 成交价格：{}, 成交数量：{}".format(
             trade.order_id,
             trade.trade_id,
@@ -126,11 +114,123 @@ def trade_record(self):
             trade.volume
         ))
 
-
-def trade_chart(self):
+def trade_chart():
     """交易结果图标展示"""
     pass
 
+def pos_record(pos_df):
+    """持仓"""
+    pass
 
+def account_daily_save(token, report_date, db):
+    """资产每日记录"""
+    # 查询账户信息
+    raw_data = {}
+    raw_data['flt'] = {"account_id": token}
+    db_data = DBData(
+        db_name=SETTINGS['ACCOUNT_DB'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    account = db.on_query_one(db_data)
 
+    if not account:
+        return False
 
+    try:
+        # 创建每日账户记录
+        account_daily = AccountRecord(
+            account_id=account['account_id'],
+            check_date=report_date,
+            assets=account['assets'],
+            available=account['available'],
+            market_value=account['market_value']
+        )
+        raw_data = {}
+        raw_data['flt'] = {'check_date': report_date}
+        raw_data['data'] = account_daily
+        db_data = DBData(
+            db_name=SETTINGS['REPORT_DB'],
+            db_cl=token,
+            raw_data=raw_data
+        )
+        db.on_replace_one(db_data)
+        return True
+    except BaseException:
+        return False
+
+def load_account_record(token, db, captial, start: str = None, end: str = None):
+    """加载资产记录"""
+    raw_data = {}
+    raw_data["flt"] = {'check_date': {'$gte': start, '$lte': end}}
+    db_data = DBData(
+        db_name=SETTINGS['REPORT_DB'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    result = list(db.on_select(db_data))
+
+    if not len(result):
+        return False
+
+    account_df = pd.DataFrame(result)
+
+    # 计算net_pnl收益情况
+    account_df['net_pnl'] = account_df['assets'] - captial
+
+    return account_df
+
+def load_pos(token, db):
+    """加载持仓数据"""
+    # 查询持仓数据
+    raw_data = {}
+    raw_data["flt"] = {}
+    db_data = DBData(
+        db_name=SETTINGS['POSITION_DB'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    result = list(db.on_select(db_data))
+
+    # 判断持仓是否为空
+    if not len(result):
+        return False
+
+    # 将pos数据转换为dataframe数据
+    pos_df = pd.DataFrame(result)
+
+    return pos_df
+
+def load_trade_record(token, db, cost, tax, start: str = None, end: str = None):
+    """加载交易记录"""
+    raw_data = {}
+    raw_data["flt"] = {
+                            'order_date': {'$gte': start, '$lte': end},
+                            'status': Status.ALLTRADED.value
+                       }
+    db_data = DBData(
+        db_name=SETTINGS['TRADE_DB'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    result = list(db.on_select(db_data))
+
+    if not len(result):
+        return
+
+    trade_df = pd.DataFrame(result)
+    trade_df['commission'] = 0.
+
+    # 计算commission
+    for i, row in trade_df.iterrows():
+        commission = 0.
+        if row['order_type'] == OrderType.BUY.value:
+            commission = row['traded'] * row['trade_price'] * cost
+        elif row['order_type'] == OrderType.SELL.value:
+            commission = row['traded'] * row['trade_price'] * (cost + tax)
+        else:
+            pass
+
+        trade_df.iloc[i]['commission'] = commission
+
+    return trade_df

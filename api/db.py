@@ -4,19 +4,18 @@ try:
 except ImportError:
     print(u'请先安装pymongo模块')
 
-from paper_trading.event.engine import Event
-from paper_trading.utility.setting import SETTINGS
 from paper_trading.utility.model import DBData, LogData
 
 
 class MongoDBService():
     """MONGODB数据库服务类"""
 
-    def __init__(self):
+    def __init__(self, host, port):
         """"""
         self.db_client = None  # 数据库对象
         self.connected = False  # 数据库连接状态
-
+        self.host = host
+        self.port = port
     def connect_db(self):
         """连接数据库"""
         try:
@@ -24,8 +23,8 @@ class MongoDBService():
                 # 读取MongoDB的设置
                 # 设置MongoDB操作的超时时间为0.5秒
                 self.db_client = MongoClient(
-                    SETTINGS['MONGO_HOST'],
-                    SETTINGS['MONGO_PORT'],
+                    self.host,
+                    self.port,
                     connectTimeoutMS=500)
 
                 # 调用server_info查询服务器状态，防止服务器异常并未连接成功

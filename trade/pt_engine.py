@@ -16,11 +16,17 @@ from paper_trading.utility.event import (
     EVENT_LOG,
     EVENT_MARKET_CLOSE,
     EVENT_ORDER_DEAL,
-    EVENT_ORDER_REJECTED
+    EVENT_ORDER_REJECTED,
+    EVENT_ORDER_CANCELED
 )
 from paper_trading.trade.account import (
     on_order_deal,
-    on_order_cancel
+    on_order_cancel,
+    on_order_refuse
+)
+from paper_trading.trade.report_builder import (
+    calculate_result,
+    trade_statistics
 )
 
 
@@ -30,7 +36,9 @@ class MainEngine():
     def __init__(
             self,
             event_engine: EventEngine = None,
-            market: Exchange = None):
+            market: Exchange = None,
+            param: dict = None
+    ):
         # 绑定事件引擎
         if not event_engine:
             self.event_engine = EventEngine()
@@ -38,8 +46,14 @@ class MainEngine():
             self.event_engine = event_engine
         self.event_engine.start()
 
-        self._db = None          # 数据库实例
-        self._market = market    # 市场实例
+        self.db = None             # 数据库实例
+        self._market = market      # 市场实例
+        self._mode = param.get('ENGINE_MODE')
+        self.settings = SETTINGS   # 绑定参数
+        self.order_put = None      # 订单推送
+
+        # 更新参数
+        self.settings.update(param)
 
         # 开启日志引擎
         log = LogEngine(self.event_engine)
@@ -66,6 +80,9 @@ class MainEngine():
         self.event_engine.register(
             EVENT_ORDER_REJECTED,
             self.process_order_rejected)
+        self.event_engine.register(
+            EVENT_ORDER_CANCELED,
+            self.process_order_canceled)
 
     def start(self):
         """引擎初始化"""
@@ -73,46 +90,58 @@ class MainEngine():
 
         # 默认使用ChinaAMarket
         if not self._market:
-            self._market = ChinaAMarket(self.event_engine)
+            self._market = ChinaAMarket(self.event_engine, self._mode)
+
+        # 交易市场初始化
+        self.order_put = self._market.on_init()
 
         # 连接数据库
-        self._db = MongoDBService()
-        self._db.connect_db()
+        host = self.settings.get('MONGO_HOST')
+        port = self.settings.get('MONGO_PORT')
+        self.db = MongoDBService(host, port)
+        self.db.connect_db()
 
         # 启动订单薄撮合程序
         self._thread.start()
 
-        return True
+        return self
 
     def _run(self):
         """订单薄撮合程序启动"""
-        self._market.on_match(self._db)
+        self._market.on_match(self.db)
 
     def _close(self):
         """模拟交易引擎关闭"""
         # 关闭市场
+        self._market._active = False
         self._thread.join()
 
         # 关闭数据库
-        self._db.close()
+        self.db.close()
 
         self.write_log("模拟交易主引擎：关闭")
 
     def process_order_deal(self, event):
         """订单成交处理"""
         order = event.data
-        on_order_deal(order, self._db)
+        on_order_deal(order, self.db)
 
     def process_order_rejected(self, event):
         """订单拒单处理"""
         order = event.data
-        on_order_cancel(order, self._db)
+        on_order_refuse(order, self.db)
+
+    def process_order_canceled(self, event):
+        """订单取消处理"""
+        data = event.data
+        token = data['token']
+        order_id = data['order_id']
+        on_order_cancel(token, order_id, self.db)
 
     def process_market_close(self, event):
         """市场关闭处理"""
         market_name = event.data
 
-        self._thread.join()
         self.write_log("{}: 交易市场已经关闭".format(market_name))
 
     def process_error_event(self, event):
@@ -121,6 +150,25 @@ class MainEngine():
         self.write_log(msg, level=logging.CRITICAL)
 
         self._close()
+
+    def get_report(self, token, start, end):
+        """获取交易报告"""
+        captial, account_df, pos_df, trade_df = calculate_result(token, self.db, start, end)
+
+        if not len(trade_df):
+            return "成交记录为空，无法计算"
+
+        # 获取分析报告
+        statistics = trade_statistics(captial, account_df, pos_df, trade_df)
+
+        return statistics
+
+    def get_pos_report(self, token, start, end):
+        pass
+
+    def get_trade_report(self, token, start, end):
+        pass
+
 
     def write_log(self, msg: str, level: int = logging.INFO):
         """"""

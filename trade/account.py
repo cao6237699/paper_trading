@@ -6,6 +6,7 @@ from datetime import datetime
 from paper_trading.utility.setting import get_token, SETTINGS
 from paper_trading.utility.constant import Status, OrderType, TradeType
 from paper_trading.utility.model import Account, Position, Order, DBData
+from paper_trading.trade.report_builder import account_daily_save
 
 # 小数点保留位数
 P = SETTINGS["POINT"]
@@ -23,6 +24,10 @@ def on_account_add(account_info: str, db):
             assets=round(SETTINGS['ASSETS'], P),
             available=round(SETTINGS['ASSETS'], P),
             market_value=round(0.0, P),
+            captial=round(SETTINGS['ASSETS'], P),
+            cost=SETTINGS['COST'],
+            tax=SETTINGS['TAX'],
+            slipping=SETTINGS['SLIPPING'],
             account_info=account_info
         )
         raw_data = {}
@@ -52,15 +57,6 @@ def on_account_exist(token: str, db):
 def on_account_delete(token: str, db):
     """账户删除"""
     try:
-        raw_data = {}
-        raw_data['flt'] = {'account_id': token}
-        order = DBData(
-            db_name=SETTINGS['ORDERS_BOOK'],
-            db_cl=SETTINGS["MARKET_NAME"],
-            raw_data=raw_data
-        )
-        db.on_delete(order)
-
         account = DBData(
             db_name=SETTINGS['ACCOUNT_DB'],
             db_cl=token,
@@ -81,6 +77,13 @@ def on_account_delete(token: str, db):
             raw_data=""
         )
         db.on_collection_delete(order)
+
+        account_record = DBData(
+            db_name=SETTINGS['REPORT_DB'],
+            db_cl=token,
+            raw_data=""
+        )
+        db.on_collection_delete(account_record)
 
         return True
     except BaseException:
@@ -204,11 +207,12 @@ def on_orders_arrived(order: Order, db):
         if not result:
             return result, msg
 
-    return on_orders_book_insert(order, db)
+    return on_orders_insert(order, db)
 
 
 def on_orders_insert(order: Order, db):
     """订单插入"""
+    order.order_id = str(time.time())
     token = order.account_id
     order.status = Status.NOTTRADED.value
 
@@ -222,7 +226,7 @@ def on_orders_insert(order: Order, db):
     )
 
     if db.on_replace_one(db_data):
-        return True, order.order_id
+        return True, order
     else:
         return False, "交易表新增订单失败"
 
@@ -337,49 +341,30 @@ def query_order_one(token: str, order_id: str, db):
         return False, ""
 
 
-"""订单薄操作"""
-
-
-def on_orders_book_insert(order: Order, db):
-    """订单薄插入订单"""
-    order.order_id = str(time.time())
-
+def query_orders_today(token: str, db):
+    """查询今天的所有订单"""
+    today = datetime.now().strftime("%Y%m%d")
     raw_data = {}
-    raw_data['flt'] = {'order_id': order.order_id}
-    raw_data['data'] = order
+    raw_data["flt"] = {"order_date": today}
     db_data = DBData(
-        db_name=SETTINGS['ORDERS_BOOK'],
-        db_cl=SETTINGS["MARKET_NAME"],
+        db_name=SETTINGS['TRADE_DB'],
+        db_cl=token,
         raw_data=raw_data
     )
+    result = db.on_select(db_data)
+    orders = []
 
-    if db.on_replace_one(db_data):
-        return on_orders_insert(order, db)
-    else:
-        return False, "订单薄新增订单失败"
-
-
-def on_orders_book_cancel(token: str, order_id: str, db):
-    """订单撤单"""
-    raw_data = {}
-    raw_data["flt"] = {'order_id': order_id, 'account_id': token}
-    db_data = DBData(
-        db_name=SETTINGS['ORDERS_BOOK'],
-        db_cl=SETTINGS["MARKET_NAME"],
-        raw_data=raw_data
-    )
-    d = db.on_delete(db_data)
-
-    if d.deleted_count:
-        result, order = query_order_one(token, order_id, db)
-        if result:
-            order = order_generate(order)
-            order.status = Status.CANCELLED.value
-            on_order_cancel(order, db)
-        return True
-    else:
+    if isinstance(result, bool):
         return False
-
+    else:
+        result = list(result)
+        if result:
+            for o in result:
+                del o["_id"]
+                orders.append(o)
+            return orders
+        else:
+            return "无委托记录"
 
 """持仓操作"""
 
@@ -597,6 +582,9 @@ def on_front_verification(order: Order, db):
     if not on_account_exist(order.account_id, db):
         return False, "账户不存在"
 
+    # 对订单的准确性验证
+    # TODO
+
     if order.order_type == OrderType.BUY.value:
         return account_verification(order, db)
     else:
@@ -658,8 +646,17 @@ def on_sell_frozen(pos, vol: float, db):
     return db.on_update(db_data)
 
 
-def on_order_cancel(order: Order, db):
-    """取消订单或订单被拒单操作"""
+def on_order_cancel(token: str, order_id: str, db):
+    """取消订单"""
+    result, order = query_order_one(token, order_id, db)
+    if result:
+        order = order_generate(order)
+        order.status = Status.CANCELLED.value
+        on_order_refuse(order, db)
+
+
+def on_order_refuse(order: Order, db):
+    """订单被拒绝"""
     on_order_update(order, db)
 
     if order.order_type == OrderType.BUY.value:
@@ -703,13 +700,16 @@ def on_sell_cancel(order: Order, db):
 """清算操作"""
 
 
-def on_liquidation(db, token: str, price_dict: dict = None):
+def on_liquidation(db, token: str, check_date: str, price_dict: dict = None):
     """清算"""
     # 更新所有持仓最新价格和冻结证券
     on_position_liquidation(db, token, price_dict)
 
     # 更新账户市值和冻结资金
     on_account_liquidation(db, token)
+
+    # 账户记录
+    account_daily_save(token, check_date, db)
 
     return True
 
@@ -738,3 +738,34 @@ def order_generate(d: dict):
         return order
     except Exception:
         raise ValueError("订单数据有误")
+
+def cancel_order_generate(token ,order_id):
+    """撤销订单生成器"""
+    try:
+        order = Order(
+            code="",
+            exchange="",
+            account_id=token,
+            order_id=order_id,
+            order_type=OrderType.CANCEL.value
+        )
+        return order
+    except Exception:
+        raise ValueError("订单数据有误")
+
+def liq_order_generate(token ,symbol, price, check_date):
+    """清算订单生成器"""
+    try:
+        code, exchange = symbol.split('.')
+        order = Order(
+            code=code,
+            exchange=exchange,
+            account_id=token,
+            order_price=price,
+            order_type=OrderType.LIQ.value,
+            order_date=check_date
+        )
+        return order
+    except Exception:
+        raise ValueError("订单数据有误")
+

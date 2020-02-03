@@ -1,8 +1,8 @@
 # 全局配置
-
 import string
 import random
 from logging import CRITICAL, INFO, DEBUG
+
 from paper_trading.utility.constant import EngineMode
 
 SETTINGS = {
@@ -11,11 +11,6 @@ SETTINGS = {
 
     # 数据精确度
     "POINT": 2,
-
-    # 模拟交易引擎模式
-    # SIMULATION 不获取真实行情进行模拟交易，即时模拟成交
-    # REALTIME 获取真实行情并进行模拟交易
-    "ENGINE_MODE": EngineMode.REALTIME.value,
 
     # 是否开启成交量计算模拟
     # 引擎模式为SIMULATION下时，此参数失效
@@ -30,21 +25,23 @@ SETTINGS = {
     # 设置此参数时请参考行情的刷新速度
     "PERIOD": 3,
 
-    # 报告功能开关参数
+    # 引擎的工作模式
+    "ENGINE_MODE": EngineMode.REALTIME.value,
+
+    # 交易报告功能开关参数
     "REPORT_MODE": True,
 
     # mongoDB 参数
-    "MONGO_HOST": "127.0.0.1",
-    "MONGO_PORT": 27017,
+    "MONGO_HOST": "",
+    "MONGO_PORT": 0,
     "ACCOUNT_DB": "pt_account",
     "POSITION_DB": "pt_position",
     "TRADE_DB": "pt_trade",
-    "ORDERS_BOOK": "pt_orders_book",
     "MARKET_NAME": "",
-    "REPORT": "pt_report",
+    "REPORT_DB": "pt_report",
 
     # tushare行情源参数
-    "TUSHARE_TOKEN": "",
+    "TUSHARE_TOKEN": "fb579635d62cf964d6878551a6fd790620a044940db43a570b0da38c",
 
     # pytdx行情参数
     "TDX_HOST": "114.80.63.5",

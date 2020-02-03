@@ -1,14 +1,13 @@
-# paper_trading
-creat your own paper trading server
+# Paper Trading
 
 
 ## 安装
 
-#### 安装Python
+### 安装Python
 
 至少Python3.7以上
 
-#### 安装mongodb和pymongo
+### 安装mongodb和pymongo
 
 安装好之后将mongodb服务开启
 
@@ -16,7 +15,7 @@ creat your own paper trading server
 pip install pymongo
 ```
 
-#### 安装tushare
+### 安装tushare
 
 安装tushare，并在tushare官网上注册你的账号
 
@@ -40,12 +39,12 @@ pip3 install -r requirements.txt
 
 ## 配置
 
-#### 配置你的setting.py
+### 配置你的setting.py
 
 setting.py 包括了所有模拟交易程序的运行参数。你要自己考虑需要什么样的模拟交易程序
 
 
-#### 配置flask app
+### 配置flask app
 
 根据你的需要修改run.py中的IP地址和端口，及调试模式
 
