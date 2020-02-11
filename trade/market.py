@@ -1,4 +1,5 @@
 
+import traceback
 from time import sleep
 from queue import Queue
 from logging import INFO
@@ -9,14 +10,14 @@ from paper_trading.event import Event
 from paper_trading.utility.event import (
     EVENT_ERROR,
     EVENT_LOG,
-    EVENT_MARKET_CLOSE,
-    EVENT_ORDER_DEAL,
-    EVENT_ORDER_REJECTED,
-    EVENT_ORDER_CANCELED
+    EVENT_MARKET_CLOSE
 )
 from paper_trading.utility.setting import SETTINGS
 from paper_trading.api.tushare_api import TushareService
 from paper_trading.trade.account import (
+    on_order_deal,
+    on_order_cancel,
+    on_order_refuse,
     order_generate,
     query_orders_today,
     query_account_list,
@@ -119,7 +120,7 @@ class ChinaAMarket(Exchange):
                 self.on_simulation_match()
 
         except Exception as e:
-            event = Event(EVENT_ERROR, e)
+            event = Event(EVENT_ERROR, traceback.format_exc())
             self.event_engine.put(event)
 
     def on_realtime_match(self):
@@ -176,7 +177,7 @@ class ChinaAMarket(Exchange):
         if order.order_type == OrderType.CANCEL.value:
             if self.orders_book.get(order_id):
                 del self.orders_book[order_id]
-                self.on_order_canceled(order.account_id, order_id)
+                on_order_cancel(order.account_id, order_id, self.db)
                 return True
             else:
                 return False
@@ -204,7 +205,6 @@ class ChinaAMarket(Exchange):
 
         # 订单推送到订单撮合引擎
         self.orders_queue.put(order)
-        return True
 
     def on_orders_match(self, order: Order):
         """订单撮合"""
@@ -244,29 +244,13 @@ class ChinaAMarket(Exchange):
         order.traded = order.volume
         order.trade_type = self.turnover_mode
 
-        event = Event(EVENT_ORDER_DEAL, order)
-        self.event_engine.put(event)
+        on_order_deal(order, self.db)
 
         self.write_log(
             "处理订单：账户：{}, 订单号：{}, 结果：{}".format(
                 order.account_id,
                 order.order_id,
                 "全部成交"))
-
-    def on_order_canceled(self, token, order_id):
-        """订单取消"""
-        data = dict()
-        data['token'] = token
-        data['order_id'] = order_id
-        event = Event(EVENT_ORDER_CANCELED, data)
-        self.event_engine.put(event)
-
-    def on_order_rejected(self, order: Order, msg: str = ""):
-        """订单被拒绝"""
-        order.status = Status.REJECTED.value
-        order.error_msg = msg
-        event = Event(EVENT_ORDER_REJECTED, order)
-        self.event_engine.put(event)
 
     def on_orders_book_rejected_all(self):
         """拒绝所有订单"""
@@ -275,8 +259,7 @@ class ChinaAMarket(Exchange):
                 order.status = Status.REJECTED.value
                 order.error_msg = "交易关闭，自动拒单"
 
-                event = Event(EVENT_ORDER_REJECTED, order)
-                self.event_engine.put(event)
+                on_order_refuse(order, self.db)
 
                 self.write_log(
                     "处理订单：账户：{}, 订单号：{}, 结果：{}".format(
@@ -315,7 +298,9 @@ class ChinaAMarket(Exchange):
             result, msg = verification(order)
 
             if not result:
-                self.on_order_rejected(order, msg)
+                order.status = Status.REJECTED.value
+                order.error_msg = msg
+                on_order_refuse(order, self.db)
 
                 self.write_log(
                     "处理订单：账户：{}, 订单号：{}, 结果：{}".format(

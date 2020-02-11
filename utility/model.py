@@ -83,6 +83,25 @@ class Position(BaseData):
 
 
 @dataclass
+class PosRecord(BaseData):
+    """持仓记录"""
+    code: str
+    exchange: str
+    account_id: str                 # 账户编号
+    first_buy_date: str             # 首次买入日期
+    last_sell_date: str             # 最后卖出日期
+    max_vol: float = 0              # 最大持仓量
+    buy_price_mean: float = 0       # 买入均价
+    sell_price_mean: float = 0      # 卖出均价
+    profit: float = 0               # 收益
+    is_clear: int = 0               # 是否清仓
+
+    def __post_init__(self):
+        """"""
+        self.pt_symbol = f"{self.code}.{self.exchange}"
+
+
+@dataclass
 class Order(BaseData):
     """订单数据类"""
     code: str

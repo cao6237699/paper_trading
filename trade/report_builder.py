@@ -4,7 +4,13 @@ import pandas as pd
 
 from paper_trading.utility.setting import SETTINGS
 from paper_trading.utility.constant import Status, OrderType
-from paper_trading.utility.model import DBData, AccountRecord
+from paper_trading.utility.model import DBData, AccountRecord, PosRecord
+
+# 小数点保留位数
+P = SETTINGS["POINT"]
+
+# 报告开关
+is_report = SETTINGS["IS_REPORT"]
 
 
 def calculate_result(token, db, start: str = None, end: str = None):
@@ -27,13 +33,13 @@ def calculate_result(token, db, start: str = None, end: str = None):
     tax = account['tax']
     slipping = account['slipping']
 
-    # 资产表
+    # 资产记录表
     account_df = load_account_record(token, db, captial, start, end)
 
-    # 持仓表
-    pos_df = load_pos(token, db)
+    # 持仓记录表
+    pos_df = load_pos_record(token, db, start, end)
 
-    # 交易表
+    # 交易记录表
     trade_df = load_trade_record(token, db, cost, tax, start, end)
 
     return captial, account_df, pos_df, trade_df
@@ -100,30 +106,13 @@ def trade_statistics(captial, assets_df, pos_df, trade_df):
 
     return statistics
 
-def trade_record(trade_df):
-    """交易记录"""
-    for i, trade in trade_df.iterrows():
-        print("订单编号：{}, 成交编号：{}, 交易日期：{}, 交易时间：{}, 证券代码：{}, 订单类型：{}, 成交价格：{}, 成交数量：{}".format(
-            trade.order_id,
-            trade.trade_id,
-            trade.check_date,
-            trade.time,
-            trade.lz_symbol,
-            trade.order_type.value,
-            trade.price,
-            trade.volume
-        ))
+"""账户记录"""
 
-def trade_chart():
-    """交易结果图标展示"""
-    pass
-
-def pos_record(pos_df):
-    """持仓"""
-    pass
-
-def account_daily_save(token, report_date, db):
+def account_record_creat(token, report_date, db):
     """资产每日记录"""
+    if not is_report:
+        return True
+
     # 查询账户信息
     raw_data = {}
     raw_data['flt'] = {"account_id": token}
@@ -137,34 +126,30 @@ def account_daily_save(token, report_date, db):
     if not account:
         return False
 
-    try:
-        # 创建每日账户记录
-        account_daily = AccountRecord(
-            account_id=account['account_id'],
-            check_date=report_date,
-            assets=account['assets'],
-            available=account['available'],
-            market_value=account['market_value']
-        )
-        raw_data = {}
-        raw_data['flt'] = {'check_date': report_date}
-        raw_data['data'] = account_daily
-        db_data = DBData(
-            db_name=SETTINGS['REPORT_DB'],
-            db_cl=token,
-            raw_data=raw_data
-        )
-        db.on_replace_one(db_data)
-        return True
-    except BaseException:
-        return False
+    # 创建每日账户记录
+    account_daily = AccountRecord(
+        account_id=account['account_id'],
+        check_date=report_date,
+        assets=account['assets'],
+        available=account['available'],
+        market_value=account['market_value']
+    )
+    raw_data = {}
+    raw_data['flt'] = {'check_date': report_date}
+    raw_data['data'] = account_daily
+    db_data = DBData(
+        db_name=SETTINGS['ACCOUNT_RECORD'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    db.on_replace_one(db_data)
 
 def load_account_record(token, db, captial, start: str = None, end: str = None):
     """加载资产记录"""
     raw_data = {}
     raw_data["flt"] = {'check_date': {'$gte': start, '$lte': end}}
     db_data = DBData(
-        db_name=SETTINGS['REPORT_DB'],
+        db_name=SETTINGS['ACCOUNT_RECORD'],
         db_cl=token,
         raw_data=raw_data
     )
@@ -180,13 +165,120 @@ def load_account_record(token, db, captial, start: str = None, end: str = None):
 
     return account_df
 
-def load_pos(token, db):
-    """加载持仓数据"""
-    # 查询持仓数据
+"""持仓记录"""
+
+def pos_record_creat(token, db, pos):
+    """创建持仓记录"""
+    if not is_report:
+        return True
+
+    pos_record = PosRecord(
+        code=pos.code,
+        exchange=pos.exchange,
+        account_id=token,
+        first_buy_date=pos.buy_date,
+        last_sell_date="",
+        max_vol=pos.volume,
+        buy_price_mean=pos.buy_price,
+        sell_price_mean=0.0,
+        profit=pos.profit
+    )
     raw_data = {}
-    raw_data["flt"] = {}
+    raw_data['flt'] = {}
+    raw_data['data'] = pos_record
     db_data = DBData(
-        db_name=SETTINGS['POSITION_DB'],
+        db_name=SETTINGS['POS_RECORD'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    return db.on_insert(db_data)
+
+def pos_record_update_buy(token , db, symbol, pos: dict):
+    """更新持仓记录--买入加仓"""
+    if not is_report:
+        return True
+
+    # 查询持仓记录
+    flt = {'pt_symbol': symbol, 'is_clear': 0}
+    data = query_pos_record_one(token, db, flt)
+    if data:
+        new_max_vol = data['max_vol'] + pos['vol']
+    else:
+        raise ValueError("持仓记录不存在")
+
+    raw_data = {}
+    raw_data["flt"] = flt
+    raw_data["set"] = {'$set': {'max_vol': new_max_vol,
+                                'buy_price_mean': pos['buy_price'],
+                                'profit': pos['profit']}}
+    db_data = DBData(
+        db_name=SETTINGS['POS_RECORD'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    return db.on_update(db_data)
+
+def pos_record_update_sell(token, db, symbol, pos):
+    """更新持仓记录--卖出减仓"""
+    if not is_report:
+        return True
+
+    query_flt = {'pt_symbol': symbol, 'is_clear': 0}
+    data = query_pos_record_one(token, db, query_flt)
+    if data:
+        max_vol = data['max_vol']
+        sell_price = data['sell_price_mean'] + ((pos['vol'] / max_vol) * pos['sell_price'])
+    else:
+        raise ValueError("持仓记录不存在")
+
+    raw_data = {}
+    raw_data["flt"] = {'pt_symbol': symbol, 'is_clear': 0}
+    raw_data["set"] = {'$set': {'sell_price_mean': round(sell_price, P),
+                                'profit': pos['profit'],
+                                'last_sell_date': pos['date']}}
+    db_data = DBData(
+        db_name=SETTINGS['POS_RECORD'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    return db.on_update(db_data)
+
+def pos_record_update_liq(token, db, symbol):
+    """更新持仓记录--清仓"""
+    if not is_report:
+        return True
+
+    raw_data = {}
+    raw_data["flt"] = {'pt_symbol': symbol, 'is_clear': 0}
+    raw_data["set"] = {'$set': {'is_clear': 1}}
+    db_data = DBData(
+        db_name=SETTINGS['POS_RECORD'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    return db.on_update(db_data)
+
+def query_pos_record_one(token ,db, flt):
+    """获取持仓记录"""
+    raw_data = {}
+    raw_data['flt'] = flt
+    db_data = DBData(
+        db_name=SETTINGS['POS_RECORD'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    pos_record = db.on_query_one(db_data)
+    if pos_record:
+        return pos_record
+    else:
+        return False
+
+def load_pos_record(token, db, start: str = None, end: str = None):
+    """加载持仓记录数据"""
+    raw_data = {}
+    raw_data["flt"] = {'first_buy_date': {'$gte': start, '$lte': end}}
+    db_data = DBData(
+        db_name=SETTINGS['POS_RECORD'],
         db_cl=token,
         raw_data=raw_data
     )
@@ -196,10 +288,12 @@ def load_pos(token, db):
     if not len(result):
         return False
 
-    # 将pos数据转换为dataframe数据
-    pos_df = pd.DataFrame(result)
+    # 将pos记录数据转换为dataframe数据
+    pos_record_df = pd.DataFrame(result)
 
-    return pos_df
+    return pos_record_df
+
+"""交易记录"""
 
 def load_trade_record(token, db, cost, tax, start: str = None, end: str = None):
     """加载交易记录"""
@@ -231,6 +325,6 @@ def load_trade_record(token, db, cost, tax, start: str = None, end: str = None):
         else:
             pass
 
-        trade_df.iloc[i]['commission'] = commission
+        trade_df.loc[i, 'commission'] = commission
 
     return trade_df

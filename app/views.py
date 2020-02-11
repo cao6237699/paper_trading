@@ -11,12 +11,13 @@ from paper_trading.trade.account import (
     on_account_delete,
     query_account_list,
     query_account_one,
+    query_account_record,
     query_position,
+    query_position_record,
     query_orders,
     query_orders_today,
     on_orders_arrived,
-    query_order_status,
-    on_liquidation
+    query_order_status
 )
 
 # 主引擎
@@ -70,12 +71,16 @@ def account_delete():
 
     if request.form.get("token"):
         token = request.form["token"]
-        result = on_account_delete(token, db)
-        if result:
-            rps['data'] = "账户删除成功"
+        if on_account_exist(token, db):
+            result = on_account_delete(token, db)
+            if result:
+                rps['data'] = "账户删除成功"
+            else:
+                rps['status'] = False
+                rps['data'] = "删除账户失败"
         else:
             rps['status'] = False
-            rps['data'] = "删除账户失败"
+            rps['data'] = "账户不存在"
     else:
         rps['status'] = False
         rps['data'] = "请求参数错误"
@@ -144,7 +149,7 @@ def position_query():
 
 @blue.route('/orders', methods=["POST"])
 def orders_query():
-    """查询交割单"""
+    """查询所有订单"""
     rps = {}
     rps['status'] = True
 
@@ -155,7 +160,7 @@ def orders_query():
             rps['data'] = orders
         else:
             rps['status'] = False
-            rps['data'] = "查询交割单失败"
+            rps['data'] = "查询订单失败"
     else:
         rps['status'] = False
         rps['data'] = "请求参数错误"
@@ -165,7 +170,7 @@ def orders_query():
 
 @blue.route('/orders_today', methods=["POST"])
 def orders_today_query():
-    """查询交割单"""
+    """查询当日订单"""
     rps = {}
     rps['status'] = True
 
@@ -176,7 +181,7 @@ def orders_today_query():
             rps['data'] = orders
         else:
             rps['status'] = False
-            rps['data'] = "查询交割单失败"
+            rps['data'] = "查询当日订单失败"
     else:
         rps['status'] = False
         rps['data'] = "请求参数错误"
@@ -269,30 +274,32 @@ def get_status():
 
 @blue.route('/liquidation', methods=["POST"])
 def liquidation():
-    """查询订单状态"""
+    """清算"""
     rps = {}
     rps['status'] = True
 
     if request.form.get("token"):
         token = request.form["token"]
-        report_date = request.form["check_date"]
-        price_dict = {}
-        if request.form.get("price_dict"):
-            price_dict = request.form["price_dict"]
-            price_dict = json.loads(price_dict)
-            if isinstance(price_dict, dict):
-                for symbol, price in price_dict.items():
-                    liq_order = liq_order_generate(token, symbol, price, report_date)
-                    main_engine.order_put(liq_order)
-                rps['data'] = "清算完成"
+        if on_account_exist(token, db):
+            report_date = request.form["check_date"]
+            price_dict = {}
+            if request.form.get("price_dict"):
+                price_dict = request.form["price_dict"]
+                price_dict = json.loads(price_dict)
+                if isinstance(price_dict, dict):
+                    for symbol, price in price_dict.items():
+                        liq_order = liq_order_generate(token, symbol, price, report_date)
+                        main_engine.order_put(liq_order)
+                    rps['data'] = "清算完成"
+                else:
+                    rps['status'] = False
+                    rps['data'] = "请求参数错误"
             else:
                 rps['status'] = False
                 rps['data'] = "请求参数错误"
-                return jsonify(rps)
         else:
             rps['status'] = False
-            rps['data'] = "请求参数错误"
-            return jsonify(rps)
+            rps['data'] = "账户不存在"
     else:
         rps['status'] = False
         rps['data'] = "请求参数错误"
@@ -308,16 +315,68 @@ def trade_report():
 
     if request.form.get("token"):
         token = request.form["token"]
-        start = request.form["start"]
-        end = request.form["end"]
-        statistics = main_engine.get_report(token, start, end)
-        if isinstance(statistics, dict):
-            rps['data'] = statistics
+        if on_account_exist(token, db):
+            start = request.form["start"]
+            end = request.form["end"]
+            statistics = main_engine.get_report(token, start, end)
+            if isinstance(statistics, dict):
+                rps['data'] = statistics
+            else:
+                rps['status'] = False
+                rps['data'] = statistics
         else:
             rps['status'] = False
-            rps['data'] = statistics
+            rps['data'] = "账户不存在"
     else:
         rps['status'] = False
         rps['data'] = "请求参数错误"
 
     return jsonify(rps)
+
+
+@blue.route('/account_line', methods=['POST'])
+def get_account_record():
+    """获取账户记录数据"""
+    rps = {}
+    rps['status'] = True
+
+    if request.form.get("token"):
+        token = request.form["token"]
+        start = request.form["start"]
+        end = request.form["end"]
+        account_record = query_account_record(token, db, start, end)
+        if account_record:
+            rps['data'] = account_record
+        else:
+            rps['status'] = False
+            rps['data'] = "无数据"
+    else:
+        rps['status'] = False
+        rps['data'] = "请求参数错误"
+
+    return jsonify(rps)
+
+
+@blue.route('/pos_record', methods=['POST'])
+def get_pos_record():
+    """获取持仓记录数据"""
+    rps = {}
+    rps['status'] = True
+
+    if request.form.get("token"):
+        token = request.form["token"]
+        start = request.form["start"]
+        end = request.form["end"]
+        pos_record = query_position_record(token, db, start, end)
+        if pos_record:
+            rps['data'] = pos_record
+        else:
+            rps['status'] = False
+            rps['data'] = "无数据"
+    else:
+        rps['status'] = False
+        rps['data'] = "请求参数错误"
+
+    return jsonify(rps)
+
+

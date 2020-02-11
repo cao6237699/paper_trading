@@ -29,7 +29,7 @@ SETTINGS = {
     "ENGINE_MODE": EngineMode.REALTIME.value,
 
     # 交易报告功能开关参数
-    "REPORT_MODE": True,
+    "IS_REPORT": True,
 
     # mongoDB 参数
     "MONGO_HOST": "",
@@ -38,7 +38,8 @@ SETTINGS = {
     "POSITION_DB": "pt_position",
     "TRADE_DB": "pt_trade",
     "MARKET_NAME": "",
-    "REPORT_DB": "pt_report",
+    "ACCOUNT_RECORD": "pt_act_record",
+    "POS_RECORD": "pt_pos_record",
 
     # tushare行情源参数
     "TUSHARE_TOKEN": "fb579635d62cf964d6878551a6fd790620a044940db43a570b0da38c",

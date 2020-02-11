@@ -6,7 +6,13 @@ from datetime import datetime
 from paper_trading.utility.setting import get_token, SETTINGS
 from paper_trading.utility.constant import Status, OrderType, TradeType
 from paper_trading.utility.model import Account, Position, Order, DBData
-from paper_trading.trade.report_builder import account_daily_save
+from paper_trading.trade.report_builder import (
+    account_record_creat,
+    pos_record_creat,
+    pos_record_update_buy,
+    pos_record_update_sell,
+    pos_record_update_liq
+)
 
 # 小数点保留位数
 P = SETTINGS["POINT"]
@@ -79,11 +85,18 @@ def on_account_delete(token: str, db):
         db.on_collection_delete(order)
 
         account_record = DBData(
-            db_name=SETTINGS['REPORT_DB'],
+            db_name=SETTINGS['ACCOUNT_RECORD'],
             db_cl=token,
             raw_data=""
         )
         db.on_collection_delete(account_record)
+
+        pos_record = DBData(
+            db_name=SETTINGS['POS_RECORD'],
+            db_cl=token,
+            raw_data=""
+        )
+        db.on_collection_delete(pos_record)
 
         return True
     except BaseException:
@@ -105,8 +118,8 @@ def on_account_buy(account: dict, order: Order, pos_val: float, db):
     """买入成交后账户操作"""
     frozen_all = account["assets"] - \
         account["available"] - account["market_value"]
-    frozen = (order.volume * order.order_price) * (1 + SETTINGS['COST'])
-    pay = (order.traded * order.trade_price) * (1 + SETTINGS['COST'])
+    frozen = (order.volume * order.order_price) * (1 + account['cost'])
+    pay = (order.traded * order.trade_price) * (1 + account['cost'])
 
     available = account["available"] + frozen - pay
     frozen_all = frozen_all - frozen
@@ -128,8 +141,8 @@ def on_account_sell(account: dict, order: Order, pos_val: float, db):
     """卖出成交后账户操作"""
     frozen = account["assets"] - account["available"] - account["market_value"]
     order_val = order.traded * order.trade_price
-    cost = order_val * SETTINGS['COST']
-    tax = order_val * SETTINGS['TAX']
+    cost = order_val * account['cost']
+    tax = order_val * account['tax']
     available = account["available"] + order_val - cost - tax
     assets = available + pos_val + frozen
 
@@ -194,6 +207,26 @@ def query_account_one(token: str, db):
             return account
         else:
             return False
+
+
+def query_account_record(token, db, start: str = None, end: str = None):
+    """查询账户记录"""
+    raw_data = {}
+    raw_data["flt"] = {'check_date': {'$gte': start, '$lte': end}}
+    db_data = DBData(
+        db_name=SETTINGS['ACCOUNT_RECORD'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    result = list(db.on_select(db_data))
+    account_record = []
+    if result:
+        for i in result:
+            del i["_id"]
+            account_record.append(i)
+        return account_record
+    else:
+        return False
 
 
 """订单操作"""
@@ -421,6 +454,26 @@ def query_position_value(token: str, db):
         return 0
 
 
+def query_position_record(token, db, start: str = None, end: str = None):
+    """查询账户记录"""
+    raw_data = {}
+    raw_data["flt"] = {'first_buy_date': {'$gte': start, '$lte': end}}
+    db_data = DBData(
+        db_name=SETTINGS['POS_RECORD'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    result = list(db.on_select(db_data))
+    pos_record = []
+    if result:
+        for i in result:
+            del i["_id"]
+            pos_record.append(i)
+        return pos_record
+    else:
+        return False
+
+
 def on_position_insert(order: Order, cost: float, db):
     """持仓增加"""
     profit = cost * -1
@@ -448,7 +501,9 @@ def on_position_insert(order: Order, cost: float, db):
         db_cl=order.account_id,
         raw_data=raw_data
     )
-    return db.on_insert(db_data)
+    if db.on_insert(db_data):
+        # 保存持仓记录
+        return pos_record_creat(order.account_id, db, pos)
 
 
 def on_position_update(order: Order, db):
@@ -461,8 +516,14 @@ def on_position_update(order: Order, db):
 
 def on_position_append(order: Order, db):
     """持仓增长"""
-    result, pos_o = query_position_one(order.account_id, order.pt_symbol, db)
-    cost = order.volume * order.trade_price * SETTINGS['COST']
+    token = order.account_id
+    symbol = order.pt_symbol
+
+    # 查询账户信息
+    account = query_account_one(token, db)
+
+    result, pos_o = query_position_one(token, symbol, db)
+    cost = order.volume * order.trade_price * account['cost']
     if result:
         volume = pos_o['volume'] + order.traded
         now_price = order.trade_price
@@ -471,7 +532,7 @@ def on_position_append(order: Order, db):
         available = pos_o['available'] + order.traded
 
         if order.trade_type == TradeType.T_PLUS1.value:
-            available = 0
+            available = pos_o['available']
 
         buy_price = round(((pos_o['volume'] *
                             pos_o['now_price']) +
@@ -480,7 +541,7 @@ def on_position_append(order: Order, db):
                           volume, 2)
 
         raw_data = {}
-        raw_data["flt"] = {'pt_symbol': order.pt_symbol}
+        raw_data["flt"] = {'pt_symbol': symbol}
         raw_data["set"] = {'$set': {'volume': round(volume, P),
                                     'available': round(available, P),
                                     'buy_price': round(buy_price, P),
@@ -488,10 +549,17 @@ def on_position_append(order: Order, db):
                                     'profit': round(profit, P)}}
         db_data = DBData(
             db_name=SETTINGS['POSITION_DB'],
-            db_cl=order.account_id,
+            db_cl=token,
             raw_data=raw_data
         )
-        return db.on_update(db_data)
+        if db.on_update(db_data):
+            # 更新持仓记录
+            pos_info = {
+                "vol": round(order.traded, P),
+                "buy_price": round(buy_price, P),
+                "profit": round(profit, P)
+            }
+            return pos_record_update_buy(token, db, symbol, pos_info)
 
     else:
         on_position_insert(order, cost, db)
@@ -499,25 +567,39 @@ def on_position_append(order: Order, db):
 
 def on_position_reduce(order: Order, db):
     """持仓减少"""
-    result, pos_o = query_position_one(order.account_id, order.pt_symbol, db)
+    token = order.account_id
+    symbol = order.pt_symbol
+
+    # 查询账户信息
+    account = query_account_one(token, db)
+
+    result, pos_o = query_position_one(token, symbol, db)
     volume = pos_o['volume'] - order.volume
     now_price = order.trade_price
-    cost = order.volume * order.trade_price * SETTINGS['COST']
-    tax = order.volume * order.trade_price * SETTINGS['TAX']
+    cost = order.volume * order.trade_price * account['cost']
+    tax = order.volume * order.trade_price * account['tax']
     profit = (order.trade_price - pos_o['now_price']) * \
         pos_o['volume'] + pos_o['profit'] - cost - tax
 
     raw_data = {}
-    raw_data["flt"] = {'pt_symbol': order.pt_symbol}
+    raw_data["flt"] = {'pt_symbol': symbol}
     raw_data["set"] = {'$set': {'volume': round(volume, P),
                                 'now_price': round(now_price, P),
                                 'profit': round(profit, P)}}
     db_data = DBData(
         db_name=SETTINGS['POSITION_DB'],
-        db_cl=order.account_id,
+        db_cl=token,
         raw_data=raw_data
     )
-    return db.on_update(db_data)
+    if db.on_update(db_data):
+        # 更新持仓记录
+        pos_info = {
+            "sell_price": round(now_price, P),
+            "vol": round(order.volume, P),
+            "profit": round(profit, P),
+            "date": order.order_date
+        }
+        return pos_record_update_sell(token, db, symbol, pos_info)
 
 
 def on_position_liquidation(db, token, price_dict: dict = None):
@@ -567,6 +649,19 @@ def on_position_frozen_cancel(token: str, pos: dict, db):
             raw_data=raw_data
         )
         db.on_update(db_data)
+    else:
+        # 持仓为空的删除持仓信息
+        raw_data = {}
+        raw_data["flt"] = {'pt_symbol': pos["pt_symbol"]}
+        db_data = DBData(
+            db_name=SETTINGS['POSITION_DB'],
+            db_cl=token,
+            raw_data=raw_data
+        )
+        db.on_delete(db_data)
+
+        # 持仓记录清算
+        pos_record_update_liq(token ,db, pos['pt_symbol'])
 
 
 """验证操作"""
@@ -592,9 +687,13 @@ def on_front_verification(order: Order, db):
 
 
 def account_verification(order: Order, db):
-    """订单账户验证"""
-    money_need = order.volume * order.order_price * (1 + SETTINGS['COST'])
-    account = query_account_one(order.account_id, db)
+    """订单账户资金验证"""
+    token = order.account_id
+
+    # 查询账户信息
+    account = query_account_one(token, db)
+
+    money_need = order.volume * order.order_price * (1 + account['cost'])
 
     if account['available'] >= money_need:
         on_buy_frozen(account, money_need, db)
@@ -667,16 +766,21 @@ def on_order_refuse(order: Order, db):
 
 def on_buy_cancel(order: Order, db):
     """买入订单取消"""
+    token = order.account_id
+
+    # 查询账户信息
+    account = query_account_one(token, db)
+
     pay = (order.volume - order.traded) * \
-        order.order_price * (1 + SETTINGS['COST'])
-    account = query_account_one(order.account_id, db)
+        order.order_price * (1 + account['cost'])
+
     available = account["available"] + pay
     raw_data = {}
-    raw_data["flt"] = {'account_id': account["account_id"]}
+    raw_data["flt"] = {'account_id': token}
     raw_data["set"] = {'$set': {'available': available}}
     db_data = DBData(
         db_name=SETTINGS['ACCOUNT_DB'],
-        db_cl=account["account_id"],
+        db_cl=token,
         raw_data=raw_data
     )
     return db.on_update(db_data)
@@ -709,7 +813,7 @@ def on_liquidation(db, token: str, check_date: str, price_dict: dict = None):
     on_account_liquidation(db, token)
 
     # 账户记录
-    account_daily_save(token, check_date, db)
+    account_record_creat(token, check_date, db)
 
     return True
 
@@ -739,6 +843,7 @@ def order_generate(d: dict):
     except Exception:
         raise ValueError("订单数据有误")
 
+
 def cancel_order_generate(token ,order_id):
     """撤销订单生成器"""
     try:
@@ -752,6 +857,7 @@ def cancel_order_generate(token ,order_id):
         return order
     except Exception:
         raise ValueError("订单数据有误")
+
 
 def liq_order_generate(token ,symbol, price, check_date):
     """清算订单生成器"""

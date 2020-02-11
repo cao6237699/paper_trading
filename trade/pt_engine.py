@@ -19,11 +19,6 @@ from paper_trading.utility.event import (
     EVENT_ORDER_REJECTED,
     EVENT_ORDER_CANCELED
 )
-from paper_trading.trade.account import (
-    on_order_deal,
-    on_order_cancel,
-    on_order_refuse
-)
 from paper_trading.trade.report_builder import (
     calculate_result,
     trade_statistics
@@ -32,7 +27,6 @@ from paper_trading.trade.report_builder import (
 
 class MainEngine():
     """模拟交易主引擎"""
-
     def __init__(
             self,
             event_engine: EventEngine = None,
@@ -60,7 +54,8 @@ class MainEngine():
         log.register_event()
 
         # 开启邮件引擎
-        # TODO
+        # self.email = EmailEngine(self.event_engine)
+        # self.email.start()
 
         # 市场交易线程
         self._thread = Thread(target=self._run)
@@ -76,13 +71,6 @@ class MainEngine():
         self.event_engine.register(
             EVENT_MARKET_CLOSE,
             self.process_market_close)
-        self.event_engine.register(EVENT_ORDER_DEAL, self.process_order_deal)
-        self.event_engine.register(
-            EVENT_ORDER_REJECTED,
-            self.process_order_rejected)
-        self.event_engine.register(
-            EVENT_ORDER_CANCELED,
-            self.process_order_canceled)
 
     def start(self):
         """引擎初始化"""
@@ -121,35 +109,17 @@ class MainEngine():
 
         self.write_log("模拟交易主引擎：关闭")
 
-    def process_order_deal(self, event):
-        """订单成交处理"""
-        order = event.data
-        on_order_deal(order, self.db)
-
-    def process_order_rejected(self, event):
-        """订单拒单处理"""
-        order = event.data
-        on_order_refuse(order, self.db)
-
-    def process_order_canceled(self, event):
-        """订单取消处理"""
-        data = event.data
-        token = data['token']
-        order_id = data['order_id']
-        on_order_cancel(token, order_id, self.db)
-
     def process_market_close(self, event):
         """市场关闭处理"""
         market_name = event.data
-
-        self.write_log("{}: 交易市场已经关闭".format(market_name))
+        self.write_log("{}: 交易市场闭市".format(market_name))
+        self._close()
 
     def process_error_event(self, event):
         """系统错误处理"""
         msg = event.data
         self.write_log(msg, level=logging.CRITICAL)
-
-        self._close()
+        # self.email.queue.put(msg)
 
     def get_report(self, token, start, end):
         """获取交易报告"""
@@ -162,13 +132,6 @@ class MainEngine():
         statistics = trade_statistics(captial, account_df, pos_df, trade_df)
 
         return statistics
-
-    def get_pos_report(self, token, start, end):
-        pass
-
-    def get_trade_report(self, token, start, end):
-        pass
-
 
     def write_log(self, msg: str, level: int = logging.INFO):
         """"""
