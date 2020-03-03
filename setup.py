@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name='paper_trading',
-    version='1.1.0',
+    version='1.2.0',
     description='creat your own paper trading server',
     long_description='',
     author=['Michael'],

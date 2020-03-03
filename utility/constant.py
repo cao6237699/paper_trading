@@ -1,12 +1,6 @@
 from enum import Enum
 
 
-class EngineMode(Enum):
-    """模拟交易引擎模式"""
-    REALTIME = "realtime"
-    SIMULATION = "simulation"
-
-
 class ConfigType(Enum):
     """app配置类型"""
     DEFAULT = "default"

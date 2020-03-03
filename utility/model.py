@@ -3,12 +3,7 @@ from logging import INFO
 from datetime import datetime
 from dataclasses import dataclass
 
-from paper_trading.utility.constant import (
-    OrderType,
-    Status,
-    PriceType,
-    Product
-)
+from paper_trading.utility.constant import Status
 
 
 @dataclass
@@ -22,16 +17,14 @@ class BaseData(object):
 @dataclass
 class DBData(BaseData):
     """数据库数据类"""
-    db_name: str  # 数据库名称
-    db_cl: str  # 表名称
-    raw_data: object  # 原始数据
+    db_name: str        # 数据库名称
+    db_cl: str          # 表名称
+    raw_data: dict      # 原始数据
 
 
 @dataclass
 class LogData(BaseData):
-    """
-    日志数据类
-    """
+    """日志数据类"""
     log_content: str  # 日志信息
     log_level: int = INFO  # 日志级别
 
@@ -61,7 +54,6 @@ class AccountRecord(BaseData):
     assets: float = 0        # 总资产
     available: float = 0     # 可用资金
     market_value: float = 0  # 总市值
-
 
 
 @dataclass

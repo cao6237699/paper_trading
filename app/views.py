@@ -35,7 +35,10 @@ def init_blue(app, engine):
     # 绑定主引擎
     global main_engine, db
     main_engine = engine
-    db = main_engine.db
+
+    # 连接数据库，用于数据查询
+    db = main_engine.creat_db()
+    db.connect_db()
 
 
 @blue.route('/')
@@ -50,7 +53,8 @@ def account_creat():
 
     if request.form.get("info"):
         info = request.form["info"]
-        token = on_account_add(info, db)
+        info_dict = json.loads(info)
+        token = on_account_add(info_dict, db)
         if token:
             rps['data'] = token
         else:

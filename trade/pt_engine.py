@@ -14,10 +14,7 @@ from paper_trading.trade.market import Exchange, ChinaAMarket
 from paper_trading.utility.event import (
     EVENT_ERROR,
     EVENT_LOG,
-    EVENT_MARKET_CLOSE,
-    EVENT_ORDER_DEAL,
-    EVENT_ORDER_REJECTED,
-    EVENT_ORDER_CANCELED
+    EVENT_MARKET_CLOSE
 )
 from paper_trading.trade.report_builder import (
     calculate_result,
@@ -30,7 +27,7 @@ class MainEngine():
     def __init__(
             self,
             event_engine: EventEngine = None,
-            market: Exchange = None,
+            market = None,
             param: dict = None
     ):
         # 绑定事件引擎
@@ -40,14 +37,13 @@ class MainEngine():
             self.event_engine = event_engine
         self.event_engine.start()
 
-        self.db = None             # 数据库实例
-        self._market = market      # 市场实例
-        self._mode = param.get('ENGINE_MODE')
-        self.settings = SETTINGS   # 绑定参数
-        self.order_put = None      # 订单推送
+        self.db = None                              # 数据库实例
+        self._market = market                       # 交易市场
+        self._settings = SETTINGS                   # 配置参数
+        self.order_put = None                       # 订单回调函数
 
         # 更新参数
-        self.settings.update(param)
+        self._settings.update(param)
 
         # 开启日志引擎
         log = LogEngine(self.event_engine)
@@ -57,7 +53,7 @@ class MainEngine():
         # self.email = EmailEngine(self.event_engine)
         # self.email.start()
 
-        # 市场交易线程
+        # 市场模拟交易线程
         self._thread = Thread(target=self._run)
 
         # 注册事件监听
@@ -68,9 +64,7 @@ class MainEngine():
     def event_register(self):
         """注册事件监听"""
         self.event_engine.register(EVENT_ERROR, self.process_error_event)
-        self.event_engine.register(
-            EVENT_MARKET_CLOSE,
-            self.process_market_close)
+        self.event_engine.register(EVENT_MARKET_CLOSE, self.process_market_close)
 
     def start(self):
         """引擎初始化"""
@@ -78,15 +72,15 @@ class MainEngine():
 
         # 默认使用ChinaAMarket
         if not self._market:
-            self._market = ChinaAMarket(self.event_engine, self._mode)
+            self._market = ChinaAMarket(self.event_engine)
+        else:
+            self._market = self._market(self.event_engine)
 
-        # 交易市场初始化
+        # 交易市场初始化，并返回订单推送函数
         self.order_put = self._market.on_init()
 
         # 连接数据库
-        host = self.settings.get('MONGO_HOST')
-        port = self.settings.get('MONGO_PORT')
-        self.db = MongoDBService(host, port)
+        self.db = self.creat_db()
         self.db.connect_db()
 
         # 启动订单薄撮合程序
@@ -120,6 +114,13 @@ class MainEngine():
         msg = event.data
         self.write_log(msg, level=logging.CRITICAL)
         # self.email.queue.put(msg)
+
+    def creat_db(self):
+        """实例化数据库"""
+        host = self._settings.get('MONGO_HOST')
+        port = self._settings.get('MONGO_PORT')
+        db = MongoDBService(host, port)
+        return db
 
     def get_report(self, token, start, end):
         """获取交易报告"""

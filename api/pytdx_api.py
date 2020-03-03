@@ -1,8 +1,5 @@
 
-try:
-    from pytdx.hq import TdxHq_API
-except Exception as e:
-    print(u'请先安装pytdx模块')
+from pytdx.hq import TdxHq_API
 
 from paper_trading.utility.setting import SETTINGS
 

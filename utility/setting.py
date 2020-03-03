@@ -1,11 +1,12 @@
 # 全局配置
 import string
 import random
-from logging import CRITICAL, INFO, DEBUG
-
-from paper_trading.utility.constant import EngineMode
+from logging import DEBUG
 
 SETTINGS = {
+    # 市场名称
+    "MARKET_NAME": "",
+
     # 账户token长度
     "TOKEN_LENGTH": 20,
 
@@ -13,7 +14,6 @@ SETTINGS = {
     "POINT": 2,
 
     # 是否开启成交量计算模拟
-    # 引擎模式为SIMULATION下时，此参数失效
     # TODO 暂时没有实现相关功能
     "VOLUME_SIMULATION": False,
 
@@ -21,12 +21,8 @@ SETTINGS = {
     "VERIFICATION": True,
 
     # 引擎撮合速度（秒）
-    # 引擎模式为SIMULATION下时，此参数失效
     # 设置此参数时请参考行情的刷新速度
     "PERIOD": 3,
-
-    # 引擎的工作模式
-    "ENGINE_MODE": EngineMode.REALTIME.value,
 
     # 交易报告功能开关参数
     "IS_REPORT": True,
@@ -37,14 +33,13 @@ SETTINGS = {
     "ACCOUNT_DB": "pt_account",
     "POSITION_DB": "pt_position",
     "TRADE_DB": "pt_trade",
-    "MARKET_NAME": "",
     "ACCOUNT_RECORD": "pt_act_record",
     "POS_RECORD": "pt_pos_record",
 
-    # tushare行情源参数
-    "TUSHARE_TOKEN": "fb579635d62cf964d6878551a6fd790620a044940db43a570b0da38c",
+    # tushare行情源参数(填写你自己的tushare token，可以前往https://tushare.pro/ 注册申请)
+    "TUSHARE_TOKEN": "",
 
-    # pytdx行情参数
+    # pytdx行情参数（可以去各家券商下载通达信交易软件找到相关的地址）
     "TDX_HOST": "114.80.63.5",
     "TDX_PORT": 7709,
 
@@ -52,7 +47,7 @@ SETTINGS = {
     "ASSETS": 1000000.00,   # 初始资金
     "COST": 0.0003,         # 交易佣金
     "TAX": 0.001,           # 印花税
-    "SLIPPING": 0.01,       # 滑点 暂未实现
+    "SLIPPING": 0.01,       # 滑点（暂未实现）
 
     # log服务参数
     "log.active": True,

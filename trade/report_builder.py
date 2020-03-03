@@ -310,7 +310,7 @@ def load_trade_record(token, db, cost, tax, start: str = None, end: str = None):
     result = list(db.on_select(db_data))
 
     if not len(result):
-        return
+        return []
 
     trade_df = pd.DataFrame(result)
     trade_df['commission'] = 0.

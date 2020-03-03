@@ -1,10 +1,7 @@
 
 from datetime import datetime
 
-try:
-    import tushare as ts
-except Exception as e:
-    print(u'请先安装tushare模块')
+import tushare as ts
 
 from paper_trading.utility.setting import SETTINGS
 

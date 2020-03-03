@@ -1,21 +1,20 @@
-try:
-    from pymongo import MongoClient, ASCENDING
-    from pymongo.errors import ConnectionFailure, OperationFailure
-except ImportError:
-    print(u'请先安装pymongo模块')
 
-from paper_trading.utility.model import DBData, LogData
+from pymongo import MongoClient
+from pymongo.errors import ConnectionFailure, OperationFailure
+
+from paper_trading.utility.model import DBData
 
 
 class MongoDBService():
     """MONGODB数据库服务类"""
 
     def __init__(self, host, port):
-        """"""
+        """构造函数"""
         self.db_client = None  # 数据库对象
         self.connected = False  # 数据库连接状态
         self.host = host
         self.port = port
+
     def connect_db(self):
         """连接数据库"""
         try:
@@ -144,7 +143,7 @@ class MongoDBService():
     def close(self):
         """数据服务关闭"""
         self.connected = False
+
         if self.db_client:
             self.db_client.close()
         self.db_client = None
-

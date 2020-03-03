@@ -20,22 +20,35 @@ P = SETTINGS["POINT"]
 """账户操作"""
 
 
-def on_account_add(account_info: str, db):
+def on_account_add(account_info: dict, db):
     """创建账户"""
     token = get_token()
+    
+    # 账户参数
+    param = {
+        'assets':SETTINGS['ASSETS'],
+        'cost': SETTINGS['COST'],
+        'tax': SETTINGS['TAX'],
+        'slipping': SETTINGS['SLIPPING'],
+        'info': ""
+    }
+
+    # 更新账户参数
+    param.update(account_info)
 
     try:
         account = Account(
             account_id=token,
-            assets=round(SETTINGS['ASSETS'], P),
-            available=round(SETTINGS['ASSETS'], P),
+            assets=round(float(param['assets']), P),
+            available=round(float(param['assets']), P),
             market_value=round(0.0, P),
-            captial=round(SETTINGS['ASSETS'], P),
-            cost=SETTINGS['COST'],
-            tax=SETTINGS['TAX'],
-            slipping=SETTINGS['SLIPPING'],
-            account_info=account_info
+            captial=round(float(param['assets']), P),
+            cost=float(param['cost']),
+            tax=float(param['tax']),
+            slipping=float(param['slipping']),
+            account_info=param['info']
         )
+
         raw_data = {}
         raw_data['flt'] = {'account_id': token}
         raw_data['data'] = account
@@ -66,35 +79,35 @@ def on_account_delete(token: str, db):
         account = DBData(
             db_name=SETTINGS['ACCOUNT_DB'],
             db_cl=token,
-            raw_data=""
+            raw_data={}
         )
         db.on_collection_delete(account)
 
         position = DBData(
             db_name=SETTINGS['POSITION_DB'],
             db_cl=token,
-            raw_data=""
+            raw_data={}
         )
         db.on_collection_delete(position)
 
         order = DBData(
             db_name=SETTINGS['TRADE_DB'],
             db_cl=token,
-            raw_data=""
+            raw_data={}
         )
         db.on_collection_delete(order)
 
         account_record = DBData(
             db_name=SETTINGS['ACCOUNT_RECORD'],
             db_cl=token,
-            raw_data=""
+            raw_data={}
         )
         db.on_collection_delete(account_record)
 
         pos_record = DBData(
             db_name=SETTINGS['POS_RECORD'],
             db_cl=token,
-            raw_data=""
+            raw_data={}
         )
         db.on_collection_delete(pos_record)
 
@@ -186,7 +199,7 @@ def query_account_list(db):
     db_data = DBData(
         db_name=SETTINGS['ACCOUNT_DB'],
         db_cl="",
-        raw_data=""
+        raw_data={}
     )
     return db.on_collections_query(db_data)
 

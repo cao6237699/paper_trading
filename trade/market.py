@@ -1,6 +1,5 @@
 
 import traceback
-from time import sleep
 from queue import Queue
 from logging import INFO
 from datetime import datetime, time
@@ -26,65 +25,28 @@ from paper_trading.trade.account import (
     on_liquidation
 )
 from paper_trading.utility.model import Order, DBData, Status, LogData
-from paper_trading.utility.constant import OrderType, PriceType, TradeType, EngineMode
+from paper_trading.utility.constant import OrderType, PriceType, TradeType
 
 
-class Exchange(object):
-    """交易所"""
+class Exchange:
+    """
+    交易所类
+    1、其他所有交易市场需要继承此类；
+    2、必须重写on_match、on_orders_arrived，verification_register
+    """
 
-    def __init__(self, event_engine, mode):
+    def __init__(self, event_engine):
         self.market_name = ""              # 市场名称
         self._active = False
         self.event_engine = event_engine   # 事件引擎
+
         self.hq_client = None              # 行情源
         self.db = None                     # 数据库实例
-        self.match_mode = mode             # 模拟交易引擎类型
         self.period = SETTINGS["PERIOD"]   # 撮合效率，单位秒
         self.exchange_symbols = []         # 交易市场标识
         self.turnover_mode = None          # 回转交易模式
-        # 真实环境下使用订单薄
-        self.orders_book = OrderedDict()
-        # 模拟环境下使用订单队列
-        self.orders_queue = Queue()
-
-    def on_match(self, db):
-        """"""
-        pass
-
-    def on_realtime_match(self):
-        """实时交易撮合"""
-        pass
-
-    def on_simulation_match(self):
-        """模拟交易撮合"""
-        pass
-
-    def on_close(self):
-        """市场关闭"""
-        pass
-
-    def liquidation(self):
-        """清算"""
-
-
-class ChinaAMarket(Exchange):
-    """中国A股交易市场"""
-
-    def __init__(self, event_engine, mode):
-        super(ChinaAMarket, self).__init__(event_engine, mode)
-
-        self.market_name = "china_a_market"            # 交易市场名称
-        self._active = False
-        self.hq_client = TushareService()              # 行情源
-        self.db = None                                 # 数据库实例
-        self.exchange_symbols = ["SH", "SZ"]           # 交易市场标识
-        self.match_mode = mode                         # 模拟交易引擎类型
-        self.turnover_mode = TradeType.T_PLUS1.value   # 回转交易模式
-        self.verification = OrderedDict()              # 验证清单
-        # 真实环境下使用订单薄
-        self.orders_book = OrderedDict()
-        # 模拟环境下使用订单队列
-        self.orders_queue = Queue()
+        self.verification = OrderedDict()  # 验证清单
+        self.orders_book = OrderedDict()   # 订单薄
 
     def on_init(self):
         """初始化"""
@@ -95,116 +57,18 @@ class ChinaAMarket(Exchange):
         SETTINGS["MARKET_NAME"] = self.market_name
 
         # 注册验证程序
-        if self.match_mode == EngineMode.REALTIME.value:
-            self.verification = {
-                "1": self.product_verification,
-                "2": self.price_verification,
-            }
-            return self.on_orders_arrived_realtime
+        self.verification_register()
 
-        else:
-            self.verification = {
-                "1": self.product_verification,
-            }
-            return self.on_orders_arrived_simulation
+        # 返回订单接收函数
+        return self.on_orders_arrived
 
     def on_match(self, db):
-        """交易撮合"""
-        self.db = db
-        self.write_log("{}：交易市场已开启".format(self.market_name))
+        """订单撮合"""
+        pass
 
-        try:
-            if self.match_mode == EngineMode.REALTIME.value:
-                self.on_realtime_match()
-            else:
-                self.on_simulation_match()
-
-        except Exception as e:
-            event = Event(EVENT_ERROR, traceback.format_exc())
-            self.event_engine.put(event)
-
-    def on_realtime_match(self):
-        """实时交易撮合"""
-        self.write_log("{}：真实行情".format(self.market_name))
-
-        # 行情连接
-        self.hq_client.connect_api()
-
-        # 加载当日未成交的订单
-        self.load_orders_today_notrade()
-
-        while self._active:
-            # 交易时间检验
-            if not self.time_verification():
-                continue
-
-            if not self.orders_book:
-                continue
-
-            for order in self.orders_book.values():
-                # 订单撮合
-                self.on_orders_match(order)
-            sleep(3)
-
-    def on_simulation_match(self):
-        """模拟交易撮合"""
-        self.write_log("{}：模拟行情".format(self.market_name))
-
-        while self._active:
-            if self.orders_queue.empty():
-                continue
-
-            order = self.orders_queue.get(block=True)
-
-            # 模拟清算
-            if order.order_type == OrderType.LIQ.value:
-                on_liquidation(
-                    self.db,
-                    order.account_id,
-                    order.order_date,
-                    {order.pt_symbol: order.order_price}
-                )
-                continue
-
-            # 订单成交
-            self.on_orders_deal(order)
-
-    def on_orders_arrived_realtime(self, order):
-        """订单到达-真实行情"""
-        order_id = order.order_id
-
-        # 取消订单的处理
-        if order.order_type == OrderType.CANCEL.value:
-            if self.orders_book.get(order_id):
-                del self.orders_book[order_id]
-                on_order_cancel(order.account_id, order_id, self.db)
-                return True
-            else:
-                return False
-        # 过滤掉清算订单
-        elif order.order_type == OrderType.LIQ.value:
-            return False
-        else:
-            # 订单验证
-            if not self.on_back_verification(order):
-                return False
-            else:
-                # 将订单添加到订单薄
-                self.orders_book[order_id] = order
-                return True
-
-    def on_orders_arrived_simulation(self, order):
-        """订单到达-模拟行情"""
-        # 过滤掉取消订单
-        if order.order_type == OrderType.CANCEL.value:
-            return False
-
-        # 订单验证
-        if not self.on_back_verification(order):
-            return False
-
-        # 订单推送到订单撮合引擎
-        self.orders_queue.put(order)
+    def on_orders_arrived(self, order):
+        """订单到达"""
+        pass
 
     def on_orders_match(self, order: Order):
         """订单撮合"""
@@ -214,6 +78,7 @@ class ChinaAMarket(Exchange):
             now_price = float(hq.loc[0, "price"])
             if order.price_type == PriceType.MARKET.value:
                 order.order_price = now_price
+                order.trade_price = now_price
                 # 订单成交
                 self.on_orders_deal(order)
                 return
@@ -239,33 +104,10 @@ class ChinaAMarket(Exchange):
 
     def on_orders_deal(self, order: Order):
         """订单成交"""
-        if not order.trade_price:
-            order.trade_price = order.order_price
         order.traded = order.volume
         order.trade_type = self.turnover_mode
 
         on_order_deal(order, self.db)
-
-        self.write_log(
-            "处理订单：账户：{}, 订单号：{}, 结果：{}".format(
-                order.account_id,
-                order.order_id,
-                "全部成交"))
-
-    def on_orders_book_rejected_all(self):
-        """拒绝所有订单"""
-        if self.orders_book:
-            for order in self.orders_book.values():
-                order.status = Status.REJECTED.value
-                order.error_msg = "交易关闭，自动拒单"
-
-                on_order_refuse(order, self.db)
-
-                self.write_log(
-                    "处理订单：账户：{}, 订单号：{}, 结果：{}".format(
-                        order.account_id,
-                        order.order_id,
-                        order.error_msg))
 
     def on_orders_status_modify(self, order):
         """更新订单状态"""
@@ -280,7 +122,7 @@ class ChinaAMarket(Exchange):
 
         return self.db.on_update(db_data)
 
-    def load_orders_today_notrade(self):
+    def load_orders_today(self):
         """查询当日未成交的订单"""
         account_list = query_account_list(self.db)
 
@@ -292,23 +134,66 @@ class ChinaAMarket(Exchange):
                         order = order_generate(order)
                         self.orders_book[order.order_id] = order
 
-    def on_back_verification(self, order: Order):
-        """后端验证"""
-        for k, verification in self.verification.items():
-            result, msg = verification(order)
-
-            if not result:
+    def on_rejected_all(self):
+        """拒绝所有订单"""
+        if self.orders_book:
+            for order in self.orders_book.values():
                 order.status = Status.REJECTED.value
-                order.error_msg = msg
+                order.error_msg = "交易关闭，自动拒单"
+
                 on_order_refuse(order, self.db)
 
                 self.write_log(
                     "处理订单：账户：{}, 订单号：{}, 结果：{}".format(
-                        order.account_id, order.order_id, msg))
+                        order.account_id,
+                        order.order_id,
+                        order.error_msg))
 
-                return False
+    def liquidation(self):
+        """收盘清算"""
+        tokens = query_account_list(self.db)
+        today = datetime.now().strftime("%Y%m%d")
 
-        return True
+        if tokens:
+            for token in tokens:
+                pos_list = query_position(token, self.db)
+                if isinstance(pos_list, list):
+                    for pos in pos_list:
+                        hq = self.hq_client.get_realtime_data(pos["pt_symbol"])
+                        if hq is not None:
+                            now_price = float(hq.loc[0, "price"])
+                            # 更新收盘行情
+                            on_position_update_price(token, pos, now_price, self.db)
+                # 清算
+                on_liquidation(self.db, token, today)
+        self.write_log("{}: 账户与持仓清算完成".format(self.market_name))
+
+    def on_close(self):
+        """模拟交易市场关闭"""
+        # 阻止接收新订单
+        SETTINGS["MARKET_NAME"] = ""
+
+        # 关闭市场撮合
+        self._active = False
+
+        # 模拟交易结束，拒绝所有未成交的订单
+        self.on_rejected_all()
+
+        # 清算
+        self.liquidation()
+
+        # 关闭行情接口
+        self.hq_client.close()
+
+        # 推送关闭事件
+        event = Event(EVENT_MARKET_CLOSE, self.market_name)
+        self.event_engine.put(event)
+
+    """订单验证"""
+
+    def verification_register(self):
+        """验证注册"""
+        pass
 
     def time_verification(self):
         """交易时间验证"""
@@ -340,45 +225,23 @@ class ChinaAMarket(Exchange):
         """价格验证"""
         return True, ""
 
-    def on_close(self):
-        """模拟交易市场关闭"""
-        # 阻止接收新订单
-        SETTINGS["MARKET_NAME"] = ""
+    def on_back_verification(self, order: Order):
+        """后端验证"""
+        for k, verification in self.verification.items():
+            result, msg = verification(order)
 
-        # 关闭市场撮合
-        self._active = False
+            if not result:
+                order.status = Status.REJECTED.value
+                order.error_msg = msg
+                on_order_refuse(order, self.db)
 
-        # 模拟交易结束，拒绝所有未成交的订单
-        self.on_orders_book_rejected_all()
+                self.write_log(
+                    "处理订单：账户：{}, 订单号：{}, 结果：{}".format(
+                        order.account_id, order.order_id, msg))
 
-        # 清算
-        self.liquidation()
+                return False
 
-        # 关闭行情接口
-        self.hq_client.close()
-
-        # 推送关闭事件
-        event = Event(EVENT_MARKET_CLOSE, self.market_name)
-        self.event_engine.put(event)
-
-    def liquidation(self):
-        """获取收盘数据"""
-        tokens = query_account_list(self.db)
-        today = datetime.now().strftime("%Y%m%d")
-
-        if tokens:
-            for token in tokens:
-                pos_list = query_position(token, self.db)
-                if isinstance(pos_list, list):
-                    for pos in pos_list:
-                        hq = self.hq_client.get_realtime_data(pos["pt_symbol"])
-                        if hq is not None:
-                            now_price = float(hq.loc[0, "price"])
-                            # 更新收盘行情
-                            on_position_update_price(token, pos, now_price, self.db)
-                # 清算
-                on_liquidation(self.db, token, today)
-        self.write_log("{}: 账户与持仓清算完成".format(self.market_name))
+        return True
 
     def write_log(self, msg: str, level: int = INFO):
         """"""
@@ -388,3 +251,134 @@ class ChinaAMarket(Exchange):
         )
         event = Event(EVENT_LOG, log)
         self.event_engine.put(event)
+
+
+class BacktestMarket(Exchange):
+    """
+    回测数据模拟交易市场
+    1、即时按委托价格成交；
+    2、接收清算订单后清算数据；
+    3、为保证数据准确，使用订单队列接收和处理订单
+    """
+
+    def __init__(self, event_engine):
+        super(BacktestMarket, self).__init__(event_engine)
+
+        self.market_name = "backtest_market"            # 交易市场名称
+        self.turnover_mode = TradeType.T_PLUS1.value    # 交收类型
+        self.orders_queue = Queue()                     # 使用订单队列
+
+    def on_match(self, db):
+        """交易撮合"""
+        self.db = db
+        self.write_log("{}：交易市场已开启".format(self.market_name))
+
+        try:
+            while self._active:
+                if self.orders_queue.empty():
+                    continue
+
+                order = self.orders_queue.get(block=True)
+
+                # 模拟清算
+                if order.order_type == OrderType.LIQ.value:
+                    on_liquidation(
+                        self.db,
+                        order.account_id,
+                        order.order_date,
+                        {order.pt_symbol: order.order_price}
+                    )
+                    continue
+
+                # 订单成交
+                # 回测使用委托价格作为成交价格
+                order.trade_price = order.order_price
+                self.on_orders_deal(order)
+
+        except Exception as e:
+            event = Event(EVENT_ERROR, traceback.format_exc())
+            self.event_engine.put(event)
+
+    def on_orders_arrived(self, order):
+        """订单到达-回测模式"""
+        # 过滤掉取消订单
+        if order.order_type == OrderType.CANCEL.value:
+            return False
+
+        # 订单验证
+        if not self.on_back_verification(order):
+            return False
+
+        # 订单推送到订单撮合引擎
+        self.orders_queue.put(order)
+
+
+class ChinaAMarket(Exchange):
+    """中国A股交易市场"""
+
+    def __init__(self, event_engine):
+        super(ChinaAMarket, self).__init__(event_engine)
+
+        self.market_name = "china_a_market"            # 交易市场名称
+        self.hq_client = TushareService()              # 行情源
+        self.exchange_symbols = ["SH", "SZ"]           # 交易市场标识
+        self.turnover_mode = TradeType.T_PLUS1.value   # 回转交易模式
+
+    def on_match(self, db):
+        """交易撮合"""
+        self.db = db
+        self.write_log("{}：交易市场已开启".format(self.market_name))
+
+        # 行情连接
+        self.hq_client.connect_api()
+
+        # 加载当日未成交的订单
+        self.load_orders_today()
+
+        try:
+            while self._active:
+                # 交易时间检验
+                if not self.time_verification():
+                    continue
+
+                if not self.orders_book:
+                    continue
+
+                for order in self.orders_book.values():
+                    # 订单撮合
+                    self.on_orders_match(order)
+
+        except Exception as e:
+            event = Event(EVENT_ERROR, traceback.format_exc())
+            self.event_engine.put(event)
+
+    def on_orders_arrived(self, order):
+        """订单到达-真实行情"""
+        order_id = order.order_id
+
+        # 取消订单的处理
+        if order.order_type == OrderType.CANCEL.value:
+            if self.orders_book.get(order_id):
+                del self.orders_book[order_id]
+                on_order_cancel(order.account_id, order_id, self.db)
+                return True
+            else:
+                return False
+        # 过滤掉清算订单
+        elif order.order_type == OrderType.LIQ.value:
+            return False
+        else:
+            # 订单验证
+            if not self.on_back_verification(order):
+                return False
+            else:
+                # 将订单添加到订单薄
+                self.orders_book[order_id] = order
+                return True
+
+    def verification_register(self):
+        """验证注册"""
+        self.verification = {
+            "1": self.product_verification,
+            "2": self.price_verification,
+        }
