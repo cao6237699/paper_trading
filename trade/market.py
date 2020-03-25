@@ -206,6 +206,8 @@ class Exchange:
         for k, time_check in time_dict.items():
             if not (now >= time_check[0] and now <= time_check[1]):
                 result = False
+            else:
+                result = True
 
         if now >= time(15, 1):
             # 市场关闭
