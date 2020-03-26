@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %} 505 {% endblock %}
+
+{% block content %}
+<section id="content">
+
+    <div class="main padder">
+
+      <div class="row">
+
+          <div class="col-lg-4 col-offset-4">
+
+            <div class="text-center m-b-large">
+
+              <h1 class="h text-white">505</h1>
+
+            </div>
+
+            <div class="list-group m-b-small">
+
+              <a href="{{url_for('main_blue.monitor')}}" class="list-group-item">
+
+                <i class="icon-chevron-right"></i>
+
+                <i class="icon-home"></i> 回到首页
+
+              </a>
+
+            </div>
+
+          </div>
+
+      </div>
+
+    </div>
+
+  </section>
+
+{% endblock %}
+
+{% block script %}
+
+<script src="{{url_for('static',filename='js/highchart.js')}}"></script>
+
+{% endblock %}

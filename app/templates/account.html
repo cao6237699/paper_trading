@@ -1,0 +1,159 @@
+{% extends "base.html" %}
+
+{% block title %} 账户 {% endblock %}
+
+{% block head %}
+
+
+{% endblock %}
+
+{% block nav %}
+<!-- nav -->
+
+	<nav id="nav" class="nav-primary visible-lg nav-vertical">
+		<ul class="nav" data-spy="affix" data-offset-top="50">
+		  <li class="active"><a href="{{url_for('main_blue.my_account')}}"><i class="icon-user icon-xlarge"></i>账户</a></li>
+		  	<li><a href="{{url_for('main_blue.my_trade')}}"><i class="icon-money icon-xlarge"></i>交易</a></li>
+		  	<li><a href="{{url_for('main_blue.my_train_k')}}"><i class="icon-gamepad icon-xlarge"></i>训练</a></li>
+		  	<li><a href="{{url_for('main_blue.trade_review')}}"><i class="icon-dashboard icon-xlarge"></i>回看</a></li>
+	  	</ul>
+  	</nav>
+
+<!-- / nav -->
+{% endblock %}
+
+{% block content %}
+
+	<section id="content">
+
+		<section class="main padder">
+
+			<div class="clearfix">
+
+				<h4><i class="icon-edit"></i>账户新建</h4>
+
+			</div>
+
+			<div class="line line-dashed m-t-large"></div>
+
+			<div class="row">
+				<div class="col-lg-4">
+				</div>
+
+				<div class="col-lg-4">
+					<section class="panel">
+						<form class="form-horizontal" method="post">
+							<div class="form-group">
+								<label class="col-lg-4 control-label">起始资本</label>
+								<div class="col-lg-6">
+									<input id="capital" type="text" name="account_text" class="form-control" value="100">
+								</div>
+								<div class="col-lg-2"><label>万元</label></div>
+							</div>
+							<div class="form-group">
+								<label class="col-lg-4 control-label">交易佣金</label>
+								<div class="col-lg-6">
+									<input id="cost" type="text" name="account_text" class="form-control" value="0.0003">
+								</div>
+								<div class="col-lg-2"></div>
+							</div>
+							<div class="form-group">
+								<label class="col-lg-4 control-label">印花税</label>
+								<div class="col-lg-6">
+									<input id="tax" type="text" name="account_text" class="form-control" value="0.001">
+								</div>
+								<div class="col-lg-2"></div>
+							</div>
+							<div class="form-group">
+								<label class="col-lg-4 control-label">滑点</label>
+								<div class="col-lg-6">
+									<input id="slippoint" type="text" name="account_text" class="form-control" value="0.03">
+								</div>
+								<div class="col-lg-2"></div>
+							</div>
+							<div class="form-group">
+								<label class="col-lg-4 control-label">别名</label>
+								<div class="col-lg-6">
+									<input id="nickname" type="text" name="account_text" class="form-control">
+								</div>
+								<div class="col-lg-2"></div>
+							</div>
+							<div class="form-group">
+								<div class="col-lg-4 col-offset-4">
+									<button type="reset" class="btn btn-white">清空</button>
+								</div>
+								<div class="col-lg-1">
+									<button id="creat_btn" type="submit" class="btn btn-danger">创建</button>
+								</div>
+							</div>
+						</form>
+					</section>
+				</div>
+
+				<div class="col-lg-4">
+				</div>
+			</div>
+
+		</section>
+
+	</section>
+
+{% endblock %}
+
+{% block script %}
+
+	<script type="text/javascript">
+		$SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+	</script>
+
+	<script type="text/javascript">
+		$(document).ready(function () {
+			$('#bind_btn').attr('hidden', "hidden");
+
+			// 创建账号按钮点击事件
+			$('#creat_btn').click(function () {
+				error_num = 0;
+				var capital = $('#capital').val();
+				if(capital == null||capital == undefined||capital == ""){
+					error_num += 1;
+				}
+				var cost = $('#cost').val();
+				if(cost == null||cost == undefined||cost == ""){
+					error_num += 1;
+				}
+				var tax = $('#tax').val();
+				if(tax == null||tax == undefined||tax == ""){
+					error_num += 1;
+				}
+				var slippoint = $('#slippoint').val();
+				if(slippoint == null||slippoint == undefined||slippoint == ""){
+					error_num += 1;
+				}
+				var nickname = $('#nickname').val();
+				if(nickname == null||nickname == undefined||nickname == ""){
+					error_num += 1;
+				}
+
+				var account_info = {
+					"capital":parseFloat(capital) * 10000,
+					"cost":parseFloat(cost),
+					"tax":parseFloat(tax),
+					"slippoint":parseFloat(slippoint),
+					"info": nickname
+				};
+				info_json = JSON.stringify(account_info);
+
+				$.post('/creat',{info:info_json}, function (data, status) {
+					alert(data.data)
+				}, 'json')
+			});
+
+			// 阻止submit动作
+			$('form').submit(function (e) {
+				e.preventDefault();
+			});
+
+		});
+	</script>
+
+{% endblock %}

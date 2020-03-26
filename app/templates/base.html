@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="utf-8">
+
+  <title>{% block title %}  {% endblock %}</title>
+
+  <meta name="description" content="mobile first, app, web app, responsive, admin dashboard, flat, flat ui">
+
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">	
+
+  <link type="text/css" rel="stylesheet" href="{{url_for('static',filename='css/bootstrap.css')}}">
+
+  <link type="text/css" rel="stylesheet" href="{{url_for('static',filename='css/font-awesome.min.css')}}">
+
+  <link type="text/css" rel="stylesheet" href="{{url_for('static',filename='css/style.css')}}">
+
+  <link type="text/css" rel="stylesheet" href="{{url_for('static',filename='css/plugin.css')}}">
+
+  <link type="text/css" rel="stylesheet" href="{{url_for('static',filename='css/landing.css')}}">
+
+  <link type="text/css" rel="stylesheet" href="{{url_for('static',filename='css/datatables.min.css')}}">
+
+  <!--[if lt IE 9]>
+
+    <script src="js/ie/respond.min.js"></script>
+
+    <script src="js/ie/html5.js"></script>
+
+  <![endif]-->
+  {% block head %}
+
+  {% endblock %}
+</head>
+
+
+<body>
+
+  <!-- header -->
+  <header id="header" class="navbar">
+      <a class="navbar-brand" href="#">量化</a>
+
+      <ul class="nav navbar-nav hidden-sm pull-right">
+        <li>
+          <div id="bind_btn" class="m-t-small">
+            <a class="btn btn-small btn-info" data-toggle="modal" href="#accountAdd"><i class="icon-plus"></i> 绑定账户</a>
+          </div>
+        </li>
+      </ul>
+
+      <form class="navbar-form pull-left shift" action="" data-toggle="shift:appendTo" data-target=".nav-primary">
+        <i class="icon-search text-muted"></i>
+        <input type="text" class="input-small form-control" placeholder="Search">
+      </form>
+
+      <button type="button" class="btn btn-link pull-right nav-toggle hidden-lg" data-toggle="class:slide-nav slide-nav-left" data-target="body">
+          <i class="icon-reorder icon-xlarge text-default"></i>
+      </button>
+  </header>
+
+  <!-- / header -->
+  {% block nav %}
+  	<!-- nav -->
+
+	  <nav id="nav" class="nav-primary visible-lg nav-vertical">
+
+	    <ul class="nav" data-spy="affix" data-offset-top="50">
+			<li><a href="{{url_for('main_blue.my_account')}}"><i class="icon-user icon-xlarge"></i>账户</a></li>
+		  	<li><a href="{{url_for('main_blue.my_trade')}}"><i class="icon-money icon-xlarge"></i>交易</a></li>
+		  	<li><a href="{{url_for('main_blue.my_train_k')}}"><i class="icon-gamepad icon-xlarge"></i>训练</a></li>
+		  	<li><a href="{{url_for('main_blue.trade_review')}}"><i class="icon-dashboard icon-xlarge"></i>回看</a></li>
+	  	</ul>
+
+	  </nav>
+	 <!-- / nav -->
+  {% endblock %}
+
+  {% block content%}
+
+  
+  {% endblock %}
+
+  <!-- .modal -->
+  <div id="accountAdd" class="modal fade">
+    <form class="m-b-none">
+      <div class="modal-dialog pos-abt" style="margin-top:-235px; top:50%">
+        <div class="modal-content">
+          <div class="modal-header">
+            <button type="button" class="close" data-dismiss="modal" aria-hidden="true"><i class="icon-remove"></i></button>
+            <h4 class="modal-title">绑定账户</h4>
+          </div>
+          <div class="modal-body">
+            <div class="block">
+              <label class="control-label">账户token</label>
+              <input id="account_token" type="text" class="form-control" placeholder="token">
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button id="account_bind" type="button" class="btn btn-small btn-default">绑定</button>
+          </div>
+        </div><!-- /.modal-content -->
+      </div>
+    </form>
+  </div>
+  <!-- / .modal -->
+  <!-- footer -->
+
+  <footer id="footer">
+
+    <div class="text-center padder clearfix">
+
+      <p>
+
+        <small>&copy; 2020 caoyongzhi 量化交易</small><br><br>
+
+      </p>
+
+    </div>
+
+  </footer>
+
+  <a href="#" class="hide slide-nav-block" data-toggle="class:slide-nav slide-nav-left" data-target="body"></a>
+
+  <script type="text/javascript">
+
+  </script>
+  
+  <!-- / footer -->
+
+  <script src="{{url_for('static',filename='js/jquery.min.js')}}"></script>
+
+  <!-- Bootstrap -->
+
+  <script src="{{url_for('static',filename='js/bootstrap.js')}}"></script>
+
+  <!-- app -->
+
+  <script src="{{url_for('static',filename='js/app.js')}}"></script>
+
+  <script src="{{url_for('static',filename='js/app.plugin.js')}}"></script>
+
+  <script src="{{url_for('static',filename='js/app.data.js')}}"></script>
+
+  <!-- parsley -->
+  <script src="{{url_for('static',filename='js/parsley/parsley.min.js')}}"></script>
+
+
+  {% block script %}
+
+  {% endblock %}
+
+</body>
+
+</html>

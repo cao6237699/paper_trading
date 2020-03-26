@@ -39,10 +39,10 @@ class Account(BaseData):
     assets: float = 0        # 总资产
     available: float = 0     # 可用资金
     market_value: float = 0  # 总市值
-    captial: float = 0       # 初始资金
+    capital: float = 0       # 初始资金
     cost: float = 0          # 佣金
     tax: float = 0           # 税金
-    slipping: float = 0      # 滑点
+    slippoint: float = 0      # 滑点
     account_info: str = ""   # 账户描述信息
 
 
@@ -100,7 +100,6 @@ class Order(BaseData):
     exchange: str
     account_id: str                           # 账户编号
     order_id: str = ""                        # 订单编号
-    product: str = ""                         # 产品类型 股票、期货等
     order_type: str = ""                      # 订单类型 buy、sell等
     price_type: str = ""                      # 价格类型 limit、market等
     trade_type: str = ""                      # 交易类型 t0、t1等

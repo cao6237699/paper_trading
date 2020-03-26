@@ -1,8 +1,7 @@
-
+import pandas as pd
 from pytdx.hq import TdxHq_API
 
 from paper_trading.utility.setting import SETTINGS
-
 
 # 市场代码对照表
 exchange_map = {}
@@ -41,6 +40,35 @@ class PYTDXService():
         except Exception:
             raise ValueError("股票数据获取失败")
 
+    def get_history_transaction_data(self, symbol, date):
+        """
+        查询历史分笔数据
+        get_history_transaction_data(TDXParams.MARKET_SZ, '000001', 0, 10, 20170209)
+        参数：市场代码, 股票代码, 起始位置, 数量, 日期
+        输出[time, price, vol, buyorsell(0:buy, 1:sell, 2:平)]
+        """
+        # 获得标的
+        code, market = self.check_symbol(symbol)
+
+        # 设置参数
+        check_date = int(date)
+        count = 2000
+        data_list = []
+        position = [6000, 4000, 2000, 0]
+        for start in position:
+            data = self.hq_api.to_df(self.hq_api.get_history_transaction_data(
+                market,
+                code,
+                start,
+                count,
+                check_date
+            ))
+            data_list.append(data)
+
+        df = pd.concat(data_list)
+        df.drop_duplicates(inplace=True)
+        return df
+
     @staticmethod
     def generate_symbols(symbol: str):
         """组装symbols数据，pytdx接收的是以市场代码和标的代码组成的元祖的list"""
@@ -49,6 +77,17 @@ class PYTDXService():
         new_symbols.append((exchange_map[exchange], code))
 
         return new_symbols
+
+    @staticmethod
+    def check_symbol(symbol: str):
+        """检查标的格式"""
+        if symbol:
+            code, market = symbol.split('.')
+            market = exchange_map.get(market)
+            return code, market
+
+        else:
+            return False
 
     def close(self):
         """数据服务关闭"""

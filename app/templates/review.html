@@ -1,0 +1,477 @@
+{% extends "base.html" %}
+
+{% block title %} 回看 {% endblock %}
+
+{% block head %}
+
+	
+{% endblock %}
+
+{% block nav %}
+<!-- nav -->
+
+  <nav id="nav" class="nav-primary visible-lg nav-vertical">
+
+	  <ul class="nav" data-spy="affix" data-offset-top="50">
+		 <li><a href="{{url_for('main_blue.my_account')}}"><i class="icon-user icon-xlarge"></i>账户</a></li>
+		 <li><a href="{{url_for('main_blue.my_trade')}}"><i class="icon-money icon-xlarge"></i>交易</a></li>
+		 <li><a href="{{url_for('main_blue.my_train_k')}}"><i class="icon-gamepad icon-xlarge"></i>训练</a></li>
+		 <li class="active"><a href="{{url_for('main_blue.trade_review')}}"><i class="icon-dashboard icon-xlarge"></i>回看</a></li>
+	  </ul>
+
+  </nav>
+
+<!-- / nav -->
+{% endblock %}
+
+{% block content %}
+  
+	<section id="content">
+
+        <section class="main padder">
+
+			<div class="clearfix">
+
+				<h4><i class="icon-edit"></i>交易回看</h4>
+
+			</div>
+
+			<div class="line line-dashed m-t-large"></div>
+
+			<div class="row">
+				<div class="col-lg-6">
+					<div id="review_setting" class="pull-left">
+						<a href="#" class="btn btn-mini btn-white btn-circle"><i class="icon-refresh"></i></a>
+					</div>
+				</div>
+				<div class="col-lg-6">
+					<div id="acc_select" class="select btn-group m-b pull-right" data-resize="auto">
+						<button type="button" data-toggle="dropdown" class="btn btn-white btn-small dropdown-toggle">
+							<span class="dropdown-label" style="width: 66px;">请选择账号</span> <span class="caret"></span>
+						</button>
+						<ul id="acc_list" class="dropdown-menu">
+						</ul>
+					</div>
+				</div>
+			</div>
+
+			<div class="row">
+
+				<div class="col-lg-6">
+					<div id="kline_show"></div>
+				</div>
+
+				<div class="col-lg-6">
+					<div id="mtime_show"></div>
+				</div>
+
+			</div>
+
+			<div class="line line-dashed m-t-large"></div>
+
+			<div class="row">
+				<div class="col-lg-12">
+					<section class="panel">
+						<header class="panel-heading"><i class="icon-folder-close-alt"></i>历史持仓</header>
+						<table id="pos_record_table" class="table table-striped m-b-none">
+							<thead>
+							<tr>
+								<th width="10%">证券代码</th>
+								<th width="15%">首次买入</th>
+								<th width="15%">最后卖出</th>
+								<th width="15%">最大持仓</th>
+								<th width="15%">买入均价</th>
+								<th width="15%">卖出均价</th>
+								<th width="15%">收益</th>
+							</tr>
+							</thead>
+							<tbody id="pos_record_tbody">
+							</tbody>
+						</table>
+					</section>
+				</div>
+			</div>
+
+			<div class="line line-dashed m-t-large"></div>
+
+			<div class="row">
+				<div class="col-lg-12">
+					<section class="panel">
+						<header class="panel-heading"><i class="icon-calendar-empty"></i>交易记录</header>
+						<table id="order_table" class="table table-striped m-b-none">
+							<thead>
+							<tr>
+								<th width="10%">证券代码</th>
+								<th width="10%">委托日期</th>
+								<th width="10%">委托时间</th>
+								<th width="10%">订单类型</th>
+								<th width="15%">委托价格</th>
+								<th width="15%">成交价格</th>
+								<th width="15%">成交数量</th>
+								<th width="15%">订单状态</th>
+							</tr>
+							</thead>
+							<tbody id="order_tbody">
+							</tbody>
+						</table>
+					</section>
+				</div>
+			</div>
+
+		</section>
+
+	</section>
+
+{% endblock %}
+
+{% block script %}
+
+	<script type="text/javascript">
+		$SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+	</script>
+	<script type="text/javascript" src="{{url_for('static', filename='highcharts/highstock.js')}}"></script>
+	<script type="text/javascript" src="{{url_for('static', filename='highcharts/exporting.js')}}"></script>
+	<script type="text/javascript" src="{{url_for('static', filename='highcharts/highcharts-zh_CN.js')}}"></script>
+<!--	<script type="text/javascript" src="{{url_for('static', filename='highcharts/drag-panes.js')}}"></script>-->
+	<script type="text/javascript" src="{{url_for('static', filename='js/datatables/datatables.min.js')}}"></script>
+
+	<script type="text/javascript">
+		$(document).ready(function () {
+			var my_token,
+				symbol = "",
+				ohlc = [],
+				vol = [],
+				mtime_data = [];
+
+			Highcharts.setOptions({
+				global:{
+					userUtc: false
+				},
+				lang: {
+					rangeSelectorZoom: ''
+				}
+			});
+
+			var kline = Highcharts.stockChart('kline_show', {
+				rangeSelector:{
+					selected:5,
+					inputDateFormat:'%Y-%m-%d'
+				},
+				title:{
+					text:'历史股价'
+				},
+				plotOptions:{
+					series:{
+						events:{
+							click: function (event) {
+								mtime_show(event.point.x)
+							}
+						}
+					}
+				},
+				xAxis:{
+					dateTimeLabelFormats: {
+						millisecond: '%H:%M:%S.%L',
+						second: '%H:%M:%S',
+						minute: '%H:%M',
+						hour: '%H:%M',
+						day: '%m-%d',
+						week: '%m-%d',
+						month: '%y-%m',
+						year: '%Y'
+					}
+				},
+				tooltip:{
+					split: false,
+					shared: true
+				},
+				yAxis:[{
+					labels:{
+						align: 'left',
+						x: -3
+					},
+					title:{
+						text: '股价'
+					},
+					height: '65%',
+					resize:{
+						enabled: true
+					},
+					lineWidth: 2
+				},{
+					labels:{
+						align: 'left',
+						x: -3
+					},
+					title:{
+						text: '成交量'
+					},
+					top: '65%',
+					height: '35%',
+					offset: 0,
+					lineWidth: 2
+				}],
+				series: [{
+					type: 'candlestick',
+					name: symbol,
+					color: 'green',
+					lineColor: 'green',
+					upColor: 'red',
+					uplineColor: 'red',
+					tooltip: {
+
+					},
+					navigatorOptions: {
+						color: Highcharts.getOptions().colors[0]
+					},
+					data: ohlc,
+					id: 'stock_hq'
+				},{
+					type: 'column',
+					name: 'vol',
+					data: vol,
+					yAxis: 1
+				},{
+					type: 'flags',
+					onSeries: 'stock_hq',
+					shape: 'circlepin',
+					width: 15
+				},{
+					type: 'flags',
+					onSeries: 'stock_hq',
+					shape: 'circlepin',
+					width: 15
+				}]
+			});
+
+			var mtime = Highcharts.stockChart('mtime_show', {
+				rangeSelector: {
+					selected:2
+				},
+				title: {
+					text: '历史分时图'
+				},
+				plotOptions: {
+					series: {
+						showInLegend: true
+					}
+				},
+				tooltip: {
+					split: false,
+					shared: true
+				},
+				series: [{
+					type: 'line',
+					name: '',
+					data: mtime_data
+				}]
+			});
+
+			//历史持仓表
+			var posRecordTable = $('#pos_record_table').DataTable({
+				"ajax":{
+					"url":"/pos_record_page",
+					"type":"post",
+					"data":function (e) {
+						e.token=my_token
+					}
+				},
+				"order":[[1, 'asc']],
+				'aoColumns':[
+					{"mData":"pt_symbol"},
+					{"mData":"first_buy_date"},
+					{"mData":"last_sell_date"},
+					{"mData":"max_vol"},
+					{"mData":"buy_price_mean"},
+					{"mData":"sell_price_mean"},
+					{"mData":"profit"}]
+			});
+
+			//定单表
+			var ordersTable = $('#order_table').DataTable({
+				"ajax":{
+					"url":"/orders_page_by_symbol",
+					"type":"post",
+					"data":function (e) {
+						e.token=my_token;
+						e.symbol=symbol
+					}
+				},
+				"order":[[1, 'asc'], [2, 'asc']],
+				'aoColumns':[
+					{"mData":"code"},
+					{"mData":"order_date"},
+					{"mData":"order_time"},
+					{"mData":"order_type"},
+					{"mData":"order_price"},
+					{"mData":"trade_price"},
+					{"mData":"traded"},
+					{"mData":"status"}]
+			});
+
+			// 绑定账户页面，保存按钮点击
+			$('#account_bind').click(function() {
+				var tk = $('#account_token').val().trim();
+
+				if(tk == null||tk == undefined||tk == ""){
+					alert("token不能为空");
+					return false;
+				}
+
+				// post给服务器验证token是否存在
+				// 如果存在则加入到账户选择控件上，如果不存在则报错
+				$.post("/account", {token:tk},
+						function(data, status){
+						if(data.status == true){
+							acc_tk = data.data.account_id;
+							acc_name = data.data.account_info;
+							acc_bind(acc_tk, acc_name);
+							$('#account_token').val("");
+
+							$('#accountAdd').modal('hide')
+						}else{
+							alert(data.data)
+						}
+				},'json');
+			});
+
+			// 绑定到账户控件上
+			function acc_bind(acc_id, acc_name) {
+				// 添加账户
+				$('#acc_list').append("<li class=\"acc_list_li\" data-value=\""+acc_id+"\"><a href=\"#\">"+acc_name+"</a></li>");
+			}
+
+			// 账户选择账户控件选中事件
+			$('#acc_list').on('click', "li", function () {
+				// 当前账户数据
+				var acc_name = $(this).children('a').text();
+				var acc_tk = $(this).attr('data-value');
+				my_token = acc_tk;
+				$('#acc_select').find('.dropdown-label').text(acc_name);
+
+				// 更新历史持仓表
+				pos_record_update()
+
+			});
+
+			// 更新历史持仓表
+			function pos_record_update() {
+				posRecordTable.ajax.reload()
+			}
+
+			// 更新订单表
+			function order_update() {
+				ordersTable.ajax.reload()
+			}
+
+			// 设置按钮点击事件
+			$('#review_setting').click(function () {
+
+			});
+
+			// 订单行点击事件
+			$('#pos_record_tbody').on('click', 'tr', function () {
+				// 获取本行的标的
+				symbol = $(this).children('td').eq(0).text();
+				var start_date = $(this).children('td').eq(1).text();
+				var end_date = $(this).children('td').eq(2).text();
+
+				//显示交易记录
+				order_update();
+
+				//显示K线行情
+				kline_show(symbol, start_date, end_date);
+			});
+
+			// 显示K线行情
+			function kline_show(symbol, start_date, end_date) {
+				$.post('/test_hq_page',
+					{
+						"symbol":symbol,
+						"start":start_date,
+						"end":end_date
+					},function (data, status) {
+						if(data.status==true){
+							data = data.data;
+							ohlc = [];
+							vol = [];
+							var dataLength = data.length,
+								i = 0;
+							for (i; i < dataLength; i += 1) {
+								timestamp = stringToTimestamp(data[i][0]);
+								ohlc.push([
+									timestamp, // the date
+									data[i][1], // open
+									data[i][2], // high
+									data[i][3], // low
+									data[i][4] // close
+								]);
+								vol.push([
+									timestamp, // the date
+									data[i][5] // the volume
+								]);
+							}
+							// 添加行情数据
+							kline.series[0].setData(ohlc);
+							kline.series[1].setData(vol);
+							kline.series[0].update({
+								name: symbol
+							});
+							// 添加买入、卖出标志
+							var buy_flag = [{
+								'x': stringToTimestamp(start_date),
+								'title': 'B',
+								'text': '首次买入'
+							}];
+							var sell_flag = [{
+								'x': stringToTimestamp(end_date),
+								'title': 'S',
+								'text': '最后卖出'
+							}];
+							kline.series[2].setData(buy_flag);
+							kline.series[3].setData(sell_flag);
+						}
+					}, 'json');
+			}
+
+			// 显示分时行情
+			function mtime_show(timestamp) {
+				$.post('/mtime_page',
+					{
+						"symbol":symbol,
+						"timestamp":timestamp
+					},function (data, status) {
+						if(data.status==true){
+							data = data.data;
+
+							var dataLength = data.length,
+								i = 0;
+							for (i; i < dataLength; i += 1) {
+								timestamp = stringToTimestamp(data[i][0]);
+								mtime_data.push([
+									timestamp, // the date
+									data[i][1], // price
+								]);
+							}
+							// 添加行情数据
+							mtime.series[0].setData(mtime_data);
+						}
+					}, 'json');
+			}
+
+			// 日期转时间戳
+			function stringToTimestamp(dateString) {
+				var y = parseInt(dateString.substring(0, 4)),
+					m = parseInt(dateString.substring(4, 6)) - 1,
+					d = parseInt(dateString.substring(6, 8)),
+					d = parseInt(dateString.substring(6, 8)),
+					d = parseInt(dateString.substring(6, 8)),
+					d = parseInt(dateString.substring(6, 8)),
+					d = parseInt(dateString.substring(6, 8));
+				return parseInt(Date.UTC(y, m, d))
+			}
+
+		});
+	</script>
+
+{% endblock %}

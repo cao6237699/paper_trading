@@ -33,21 +33,21 @@ SETTINGS = {
     "ACCOUNT_DB": "pt_account",
     "POSITION_DB": "pt_position",
     "TRADE_DB": "pt_trade",
-    "ACCOUNT_RECORD": "pt_act_record",
+    "ACCOUNT_RECORD": "pt_acc_record",
     "POS_RECORD": "pt_pos_record",
 
     # tushare行情源参数(填写你自己的tushare token，可以前往https://tushare.pro/ 注册申请)
-    "TUSHARE_TOKEN": "",
+    "TUSHARE_TOKEN": "3bd1ab27e003a6390baad5bd14292a0ab7d0c21983f8f6f176f51c6f",
 
     # pytdx行情参数（可以去各家券商下载通达信交易软件找到相关的地址）
-    "TDX_HOST": "114.80.63.5",
+    "TDX_HOST": "210.51.39.201",
     "TDX_PORT": 7709,
 
     # 账户初始参数
-    "ASSETS": 1000000.00,   # 初始资金
+    "CAPITAL": 1000000.00,  # 初始资金
     "COST": 0.0003,         # 交易佣金
     "TAX": 0.001,           # 印花税
-    "SLIPPING": 0.01,       # 滑点（暂未实现）
+    "SLIPPOINT": 0.01,      # 滑点（暂未实现）
 
     # log服务参数
     "log.active": True,

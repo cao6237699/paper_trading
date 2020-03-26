@@ -4,17 +4,18 @@ import requests
 from datetime import datetime
 
 import talib
+import numpy as np
 import pandas as pd
+from pathlib import Path
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_finance import candlestick_ohlc
 from matplotlib.pylab import date2num
-from lazyTrader.lazy.lzConstant import Status
-
 
 
 # 超时时间
-MARKET_TIMEOUT = 30
+MARKET_TIMEOUT = 120
+
 
 class PaperTrading():
     """模拟交易"""
@@ -28,24 +29,30 @@ class PaperTrading():
 
         # 连接模拟模拟市场
         result, msg = self.connect()
-
         if not result:
-            self.connected = False
             raise ConnectionError(msg)
 
         if token:
-            self._token = token
+            self.__token = token
         else:
             status, new_token = self.creat(info)
             if status:
-                self._token = new_token
-                self.connected = True
+                self.__token = new_token
             else:
                 raise ValueError(new_token)
 
-    def get_token(self):
+        # 账户绑定
+        self.account_bind()
+
+    @property
+    def token(self):
         """获取token"""
-        return self._token
+        return self.__token
+
+    @property
+    def captial(self):
+        """获取账户起始资本"""
+        return self.__capital
 
     def get_url(self, method_name:str):
         """生成url"""
@@ -80,9 +87,29 @@ class PaperTrading():
 
         return wrapper
 
+    def account_bind(self):
+        """账户绑定"""
+        # 获取账户数据
+        status, account = self.account()
+
+        if status:
+            if isinstance(account, dict):
+                self.__capital = account['capital']
+                self.__cost = account['cost']
+                self.__tax = account['tax']
+                self.__slippoint = account['slippoint']
+            else:
+                raise ValueError(account)
+        else:
+            raise ValueError(account)
+
     @url_request
     def creat(self, info: dict):
-        """创建模拟交易账户"""
+        """
+        创建模拟交易账户
+        :param info:账户信息，可以在此定制账户参数，例如cost、sex等
+        :return:(status, data)  正确时数据类型(bool, dict) 错误时数据类型(bool, str)
+        """
         url = self.get_url("creat")
         if not isinstance(info, dict):
             raise ValueError("账户信息格式错误")
@@ -94,60 +121,82 @@ class PaperTrading():
         if r.status_code == requests.codes.ok:
             d = json.loads(r.text)
             if d["status"]:
-                self._token = d["data"]
+                self.__token = d["data"]
 
         return r
 
     @url_request
     def delete(self):
-        """删除模拟交易账户"""
+        """
+        删除模拟交易账户
+        :return:(status, data)  正确时数据类型(bool, str) 错误时数据类型(bool, str)
+        """
         url = self.get_url("delete")
-        data = {'token': self._token}
+        data = {'token': self.__token}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
 
     @url_request
     def get_list(self):
-        """查询账户列表"""
+        """
+        查询账户列表
+        :return:(status, data)  正确时数据类型(bool, list) 错误时数据类型(bool, str)
+        """
         url = self.get_url("list")
         r = requests.get(url, timeout=MARKET_TIMEOUT)
         return r
 
     @url_request
     def account(self):
-        """查询账户信息"""
+        """
+        查询账户信息
+        :return:(status, data)  正确时数据类型(bool, dict) 错误时数据类型(bool, str)
+        """
         url = self.get_url("account")
-        data = {'token': self._token}
+        data = {'token': self.__token}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
 
     @url_request
     def pos(self):
-        """查询持仓信息"""
+        """
+        查询持仓信息
+        :return:(status, data)  正确时数据类型(bool, list) 错误时数据类型(bool, str)
+        """
         url = self.get_url("pos")
-        data = {'token': self._token}
+        data = {'token': self.__token}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
 
     @url_request
     def orders(self):
-        """查询交割单信息"""
+        """
+        查询交割单信息
+        :return:(status, data)  正确时数据类型(bool, list) 错误时数据类型(bool, str)
+        """
         url = self.get_url("orders")
-        data = {'token': self._token}
+        data = {'token': self.__token}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
 
     @url_request
     def orders_today(self):
-        """查询交割单信息"""
+        """
+        查询交割单信息
+        :return:(status, data)  正确时数据类型(bool, list) 错误时数据类型(bool, str)
+        """
         url = self.get_url("orders_today")
-        data = {'token': self._token}
+        data = {'token': self.__token}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
 
     @url_request
     def order_send(self, order):
-        """发单"""
+        """
+        发单
+        :param order:dict格式订单数据
+        :return:(status, data)  正确时数据类型(bool, str) 错误时数据类型(bool, str)
+        """
         if isinstance(order, dict):
             order = json.dumps(order)
             order.encode("utf-8")
@@ -158,56 +207,267 @@ class PaperTrading():
 
     @url_request
     def order_cancel(self, order_id):
-        """撤单"""
+        """
+        撤单
+        :param order_id:订单ID
+        :return:(status, data)  正确时数据类型(bool, str) 错误时数据类型(bool, str)
+        """
         url = self.get_url("cancel")
-        data = {'token': self._token, "order_id": order_id}
+        data = {'token': self.__token, "order_id": order_id}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
 
     @url_request
     def order_status(self, order_id):
-        """查询订单状态"""
+        """
+        查询订单状态
+        :param order_id:订单ID
+        :return:(status, data)  正确时数据类型(bool, str) 错误时数据类型(bool, str)
+        """
         url = self.get_url("status")
-        data = {'token': self._token, "order_id": order_id}
+        data = {'token': self.__token, "order_id": order_id}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
 
     @url_request
     def liquidation(self, check_date: str, price_dict: dict):
-        """清算"""
+        """
+        清算
+        :param check_date:清算日期
+        :param price_dict:清算时持仓清算价格
+        :return:(status, data)  正确时数据类型(bool, str) 错误时数据类型(bool, str)
+        """
         price_dict_data = json.dumps(price_dict)
         url = self.get_url("liquidation")
-        data = {'token': self._token, 'check_date': check_date, "price_dict": price_dict_data.encode("utf-8")}
+        data = {'token': self.__token, 'check_date': check_date, "price_dict": price_dict_data.encode("utf-8")}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
 
     @url_request
-    def report(self, start: str, end: str):
-        """查询报告"""
-        url = self.get_url("report")
-        data = {'token': self._token, 'start': start, 'end': end}
-        r = requests.post(url, data, timeout=MARKET_TIMEOUT)
-        return r
+    def replenish_captial(self):
+        """补充资本"""
+        pass
+
+    @url_request
+    def return_captial(self):
+        """归还资本"""
+        pass
 
     @url_request
     def account_record(self, start: str,end: str):
-        """查询账户逐日记录数据"""
+        """
+        查询账户逐日记录数据
+        :param start:数据开始日期
+        :param end:数据结束日期
+        :return:(status, data)  正确时数据类型(bool, list) 错误时数据类型(bool, str)
+        """
         url = self.get_url("account_line")
-        data = {'token': self._token, 'start': start, 'end': end}
+        data = {'token': self.__token, 'start': start, 'end': end}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
 
     @url_request
     def pos_record(self, start: str, end: str):
-        """查询账户逐日记录数据"""
+        """
+        查询持仓记录数据
+        :param start:数据开始日期
+        :param end:数据结束日期
+        :return:(status, data)  正确时数据类型(bool, list) 错误时数据类型(bool, str)
+        """
         url = self.get_url("pos_record")
-        data = {'token': self._token, 'start': start, 'end': end}
+        data = {'token': self.__token, 'start': start, 'end': end}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
 
-    def show_report(self, report_dict: dict):
+    def get_assets_record(self, start, end, save_data=False):
+        """
+        获取逐日资产记录
+        :param start:
+        :param end:
+        :param save_data:
+        :return:dataframe数据
+        """
+
+        status, assets_record = self.account_record(start, end)
+        if status:
+            if isinstance(assets_record, list):
+                assets_df = pd.DataFrame(assets_record)
+                # 计算net_pnl收益情况
+                assets_df['net_pnl'] = assets_df['assets'] - self.__capital
+
+                if save_data:
+                    self.downloader(assets_df, start, end, "account.xls")
+
+                return assets_df
+            else:
+                raise ValueError(assets_record)
+        else:
+            raise ValueError(assets_record)
+
+    def get_pos_record(self, start, end, save_data=False):
+        """
+        获取逐日持仓记录
+        :param start:
+        :param end:
+        :param save_data:
+        :return:
+        """
+        status, pos_record = self.pos_record(start, end)
+        if status:
+            if isinstance(pos_record, list):
+                pos_df = pd.DataFrame(pos_record)
+
+                if save_data:
+                    self.downloader(pos_df, start, end, "pos.xls")
+
+                return pos_df
+            else:
+                raise ValueError(pos_record)
+        else:
+            raise ValueError(pos_record)
+
+    def get_trade_record(self, start, end, save_data=False):
+        """
+        获取交易记录
+        :param start:
+        :param end:
+        :param save_data:
+        :return:
+        """
+        status, trade_record = self.orders()
+        if status:
+            if isinstance(trade_record, list):
+                trade_df = pd.DataFrame(trade_record)
+                trade_df = trade_df[trade_df['status'] == "全部成交"]
+                trade_df['commission'] = 0.
+
+                # 计算commission
+                for i, row in trade_df.iterrows():
+                    commission = 0.
+                    if row['order_type'] == "buy":
+                        commission = row['traded'] * row['trade_price'] * self.__cost
+                    elif row['order_type'] == "sell":
+                        commission = row['traded'] * row['trade_price'] * (self.__cost + self.__tax)
+                    else:
+                        pass
+
+                    trade_df.loc[i, 'commission'] = commission
+
+                if save_data:
+                    self.downloader(trade_df, start, end, "orders.xls")
+
+                return trade_df
+            else:
+                raise ValueError(trade_record)
+        else:
+            raise ValueError(trade_record)
+
+    def data_statistics(self, assets_df, pos_df, trade_df, save_data=False):
+        """交易结果分析"""
+        # 初始资金
+        start_date = assets_df.iloc[0]['check_date']
+        end_date = assets_df.iloc[-1]['check_date']
+
+        total_days = len(assets_df)
+        profit_days = len(assets_df[assets_df["net_pnl"] > 0])
+        loss_days = len(assets_df[assets_df["net_pnl"] < 0])
+
+        end_balance = float(assets_df.iloc[-1].assets)
+        max_drawdown = round((assets_df['assets'].max() - assets_df['assets'].min()), 2)
+        max_ddpercent = round((max_drawdown / assets_df['assets'].max()) * 100, 2)
+
+        total_net_pnl = round((end_balance - self.__capital), 2)
+        total_commission = float(trade_df['commission'].sum())
+        total_slippage = 0
+        total_turnover = float(trade_df['volume'].sum())
+        total_trade_count = len(trade_df)
+
+        win_num = len(pos_df[pos_df.profit > 0])
+        loss_num = len(pos_df[pos_df.profit <= 0])
+        win_rate = round((win_num / (win_num + loss_num) * 100), 2)
+
+        total_return = round(((end_balance / self.__capital - 1) * 100), 2)
+        annual_return = round((total_return / total_days * 240), 2)
+        return_mean = pos_df['profit'].mean()
+        return_std = pos_df['profit'].std()
+
+        if return_std:
+            sharpe_ratio = float(return_mean / return_std * np.sqrt(240))
+        else:
+            sharpe_ratio = 0
+
+        statistics = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "total_days": total_days,
+            "profit_days": profit_days,
+            "loss_days": loss_days,
+            "captial": self.__capital,
+            "end_balance": end_balance,
+            "max_drawdown": max_drawdown,
+            "max_ddpercent": max_ddpercent,
+            "total_net_pnl": total_net_pnl,
+            "total_commission": total_commission,
+            "total_slippage": total_slippage,
+            "total_turnover": total_turnover,
+            "total_trade_count": total_trade_count,
+            "win_num": win_num,
+            "loss_num": loss_num,
+            "win_rate": win_rate,
+            "total_return": total_return,
+            "annual_return": annual_return,
+            "daily_return": return_mean,
+            "return_std": return_std,
+            "sharpe_ratio": sharpe_ratio,
+        }
+
+        if save_data:
+            self.downloader(statistics, start_date, end_date, "report.xls")
+
+        return statistics
+
+    def get_report(self, start: str, end: str):
+        """获取交易报告"""
+        trade_df = self.get_trade_record(start, end)
+
+        if not len(trade_df):
+            print("成交记录为空，无法计算")
+            return {}
+
+        # 展示账户曲线
+        assets_df = self.get_assets_record(start, end)
+
+        # 展示持仓记录
+        pos_df = self.get_pos_record(start, end)
+
+        # 计算分析结果
+        statistics_result = self.data_statistics(assets_df, pos_df, trade_df)
+
+        return statistics_result
+
+    def show_report(self, start: str, end: str, save_data=False):
+        """显示分析报告"""
+        trade_df = self.get_trade_record(start, end, save_data)
+
+        if not len(trade_df):
+            return False, "成交记录为空，无法计算"
+
+        # 展示账户曲线
+        assets_df = self.get_assets_record(start, end, save_data)
+        self.show_account_line(assets_df)
+
+        # 展示持仓记录
+        pos_df = self.get_pos_record(start, end, save_data)
+        self.show_pos_record(pos_df)
+
+        # 计算分析结果
+        statistics_result = self.data_statistics(assets_df, pos_df, trade_df)
+
+        # 展示分析结果
+        self.show_statistics(statistics_result)
+
+    def show_statistics(self, report_dict: dict):
         """显示报告"""
-        # 数据分析报告
         self.output("-" * 30)
         self.output(f"首个交易日：\t{report_dict['start_date']}")
         self.output(f"最后交易日：\t{report_dict['end_date']}")
@@ -238,9 +498,8 @@ class PaperTrading():
         self.output(f"收益标准差：\t{report_dict['return_std']:,.2f}%")
         self.output(f"Sharpe Ratio：\t{report_dict['sharpe_ratio']:,.2f}")
 
-    def show_account_line(self, account_record: list):
+    def show_account_line(self, assets_df):
         """显示资产曲线"""
-        assets_df = pd.DataFrame(account_record)
         assets_df.sort_values(by='check_date', ascending=True, inplace=True)
         assets_df.index = assets_df['check_date']
 
@@ -255,15 +514,22 @@ class PaperTrading():
 
         # 显示持仓曲线
 
-    def show_pos_record(self, pos_record: list):
+    def show_pos_record(self, pos_df):
         """显示持仓情况"""
-        pos_df = pd.DataFrame(pos_record)
         pos_df.sort_values(by=['first_buy_date'], ascending=True, inplace=True)
         pos_df = pos_df[['pt_symbol', 'first_buy_date', 'last_sell_date', 'max_vol', 'buy_price_mean', 'sell_price_mean', 'profit']]
         pos_df.columns = ['代码', '首次买入', '最后卖出', '累计买入', '买均价', '卖均价', '盈亏']
         print(pos_df)
 
-    def show_kline(self, kline_data, orders: list):
+    def show_orders_record(self, order_df):
+        """显示订单记录"""
+        order_df.sort_values(by=['order_id'], ascending=True, inplace=True)
+        order_df = order_df[
+            ['order_date', 'order_time', 'order_type', 'order_price', 'trade_price', 'volume']]
+        order_df.columns = ['日期', '时间', '类型', '委托价格', '成交价格', '成交数量']
+        print(order_df)
+
+    def show_order_kline(self, kline_data, order_df):
         """显示K线并标记买入卖出点"""
         # TODO 暂时不能通用只能识别pytdx 的get_k_data函数功能
         # 设置mpl样式
@@ -309,38 +575,26 @@ class PaperTrading():
         ax_vol.set_xlabel("date")
 
         # 标记订单点位
-        if orders:
-            # 把orders 转换为dataframe
-            order_df = pd.DataFrame(orders)
-            order_df.order_date = pd.to_datetime(order_df.order_date)
-            for i, row in order_df.iterrows():
-                if row['status'] == Status.ALLTRADED.value:
-                    order_date = row['order_date']
-                    if row['order_type'] == "buy":
-                        ax_canddle.annotate("B",
-                                            xy=(order_date, kline_data.loc[order_date].low),
-                                            xytext=(order_date, kline_data.loc[order_date].low - 1),
-                                            arrowprops=dict(facecolor="r",
-                                                            alpha=0.3,
-                                                            headlength=10,
-                                                            width=10))
-                    else:
-                        ax_canddle.annotate("S",
-                                            xy=(order_date, kline_data.loc[order_date].high),
-                                            xytext=(order_date, kline_data.loc[order_date].high + 1),
-                                            arrowprops=dict(facecolor="g",
-                                                            alpha=0.3,
-                                                            headlength=10,
-                                                            width=10))
-
-    def show_orders_record(self, order_list: list):
-        """显示订单"""
-        order_df = pd.DataFrame(order_list)
-        order_df.sort_values(by=['order_id'], ascending=True, inplace=True)
-        order_df = order_df[
-            ['order_date', 'order_time', 'order_type', 'order_price', 'trade_price', 'volume']]
-        order_df.columns = ['日期', '时间', '类型', '委托价格', '成交价格', '成交数量']
-        print(order_df)
+        order_df.order_date = pd.to_datetime(order_df.order_date)
+        for i, row in order_df.iterrows():
+            if row['status'] == "全部成交":
+                order_date = row['order_date']
+                if row['order_type'] == "buy":
+                    ax_canddle.annotate("B",
+                                        xy=(order_date, kline_data.loc[order_date].low),
+                                        xytext=(order_date, kline_data.loc[order_date].low - 1),
+                                        arrowprops=dict(facecolor="r",
+                                                        alpha=0.3,
+                                                        headlength=10,
+                                                        width=10))
+                else:
+                    ax_canddle.annotate("S",
+                                        xy=(order_date, kline_data.loc[order_date].high),
+                                        xytext=(order_date, kline_data.loc[order_date].high + 1),
+                                        arrowprops=dict(facecolor="g",
+                                                        alpha=0.3,
+                                                        headlength=10,
+                                                        width=10))
 
     def show_pos(self, pos_list: list):
         """显示持仓情况"""
@@ -354,6 +608,32 @@ class PaperTrading():
             print(pos_df)
         else:
             print("无持仓")
+
+    def downloader(self, data, start_date, end_date, file_name):
+        """测试结果下载"""
+        # 获取地址
+        file_name = "_".join([start_date, end_date, file_name])
+        file_path = self.get_folder_path(file_name)
+
+        if isinstance(data, dict):
+            data_list = list()
+            data_list.append(data)
+            df = pd.DataFrame(data_list)
+        else:
+            df = pd.DataFrame(data)
+
+        df.to_excel(file_path)
+        print(f"数据已保存，地址为：{file_path}")
+
+    def get_folder_path(self, file_name):
+        """获取文件夹路径"""
+        save_addr = Path.cwd()
+        folder_path = save_addr.joinpath(self.__token)
+
+        if not folder_path.exists():
+            folder_path.mkdir()
+
+        return folder_path.joinpath(file_name)
 
     @staticmethod
     def output(msg):

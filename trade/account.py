@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime
 
 from paper_trading.utility.setting import get_token, SETTINGS
-from paper_trading.utility.constant import Status, OrderType, TradeType
+from paper_trading.utility.constant import Status, OrderType, TradeType, PriceType
 from paper_trading.utility.model import Account, Position, Order, DBData
 from paper_trading.trade.report_builder import (
     account_record_creat,
@@ -26,10 +26,10 @@ def on_account_add(account_info: dict, db):
     
     # 账户参数
     param = {
-        'assets':SETTINGS['ASSETS'],
+        'capital':SETTINGS['CAPITAL'],
         'cost': SETTINGS['COST'],
         'tax': SETTINGS['TAX'],
-        'slipping': SETTINGS['SLIPPING'],
+        'slippoint': SETTINGS['SLIPPOINT'],
         'info': ""
     }
 
@@ -39,13 +39,13 @@ def on_account_add(account_info: dict, db):
     try:
         account = Account(
             account_id=token,
-            assets=round(float(param['assets']), P),
-            available=round(float(param['assets']), P),
+            assets=round(float(param['capital']), P),
+            available=round(float(param['capital']), P),
             market_value=round(0.0, P),
-            captial=round(float(param['assets']), P),
+            capital=round(float(param['capital']), P),
             cost=float(param['cost']),
             tax=float(param['tax']),
-            slipping=float(param['slipping']),
+            slippoint=float(param['slippoint']),
             account_info=param['info']
         )
 
@@ -258,9 +258,15 @@ def on_orders_arrived(order: Order, db):
 
 def on_orders_insert(order: Order, db):
     """订单插入"""
+    # 生成订单ID
     order.order_id = str(time.time())
     token = order.account_id
-    order.status = Status.NOTTRADED.value
+
+    # 补充订单信息
+    if order.order_price == 0:
+        order.price_type = PriceType.MARKET.value
+    else:
+        order.price_type = PriceType.LIMIT.value
 
     raw_data = {}
     raw_data['flt'] = {'order_id': order.order_id}
@@ -412,6 +418,31 @@ def query_orders_today(token: str, db):
         else:
             return "无委托记录"
 
+
+def query_orders_by_symbol(token: str, symbol: str, db):
+    """查询某symbol的所有订单"""
+    raw_data = {}
+    raw_data["flt"] = {'pt_symbol': symbol}
+    db_data = DBData(
+        db_name=SETTINGS['TRADE_DB'],
+        db_cl=token,
+        raw_data=raw_data
+    )
+    result = db.on_select(db_data)
+    orders = []
+
+    if isinstance(result, bool):
+        return False
+    else:
+        result = list(result)
+        if result:
+            for o in result:
+                del o["_id"]
+                orders.append(o)
+            return orders
+        else:
+            return "无此代码的交易记录"
+
 """持仓操作"""
 
 
@@ -470,7 +501,15 @@ def query_position_value(token: str, db):
 def query_position_record(token, db, start: str = None, end: str = None):
     """查询账户记录"""
     raw_data = {}
-    raw_data["flt"] = {'first_buy_date': {'$gte': start, '$lte': end}}
+    raw_data["flt"] = {}
+
+    if start and end == None:
+        raw_data["flt"] = {'first_buy_date': {'$gte': start}}
+    elif start == None and end:
+        raw_data["flt"] = {'first_buy_date': {'$lte': end}}
+    elif start and end:
+        raw_data["flt"] = {'first_buy_date': {'$gte': start, '$lte': end}}
+
     db_data = DBData(
         db_name=SETTINGS['POS_RECORD'],
         db_cl=token,
@@ -674,7 +713,7 @@ def on_position_frozen_cancel(token: str, pos: dict, db):
         db.on_delete(db_data)
 
         # 持仓记录清算
-        pos_record_update_liq(token ,db, pos['pt_symbol'])
+        pos_record_update_liq(token , db, pos['pt_symbol'])
 
 
 """验证操作"""
@@ -831,6 +870,26 @@ def on_liquidation(db, token: str, check_date: str, price_dict: dict = None):
     return True
 
 
+def new_order_generate(d: dict):
+    """新订单生成器，提高了容错并简化了数据,也是接收订单数据的标准"""
+    try:
+        vol = d.get('vol', 0)
+        volume = d.get('volume', vol)
+        order = Order(
+            code=d['code'],
+            exchange=d['exchange'],
+            account_id=d['account_id'],
+            order_type=d['order_type'],
+            order_price=d.get('order_price', 0),
+            volume=volume,
+            order_date=d['order_date'],
+            order_time=d['order_time']
+        )
+        return order
+    except Exception:
+        raise ValueError("订单数据有误")
+
+
 def order_generate(d: dict):
     """订单生成器"""
     try:
@@ -839,7 +898,6 @@ def order_generate(d: dict):
             exchange=d['exchange'],
             account_id=d['account_id'],
             order_id=d['order_id'],
-            product=d['product'],
             order_type=d['order_type'],
             price_type=d['price_type'],
             trade_type=d['trade_type'],

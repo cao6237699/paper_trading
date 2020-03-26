@@ -1,6 +1,8 @@
 
+import copy
 import traceback
 from queue import Queue
+from time import sleep
 from logging import INFO
 from datetime import datetime, time
 from collections import OrderedDict
@@ -12,7 +14,7 @@ from paper_trading.utility.event import (
     EVENT_MARKET_CLOSE
 )
 from paper_trading.utility.setting import SETTINGS
-from paper_trading.api.tushare_api import TushareService
+from paper_trading.api.pytdx_api import PYTDXService
 from paper_trading.trade.account import (
     on_order_deal,
     on_order_cancel,
@@ -72,50 +74,65 @@ class Exchange:
 
     def on_orders_match(self, order: Order):
         """订单撮合"""
-        hq = self.hq_client.get_realtime_data(order.pt_symbol)
+        try:
+            hq = self.hq_client.get_realtime_data(order.pt_symbol)
 
-        if hq is not None:
-            now_price = float(hq.loc[0, "price"])
-            if order.price_type == PriceType.MARKET.value:
-                order.order_price = now_price
-                order.trade_price = now_price
-                # 订单成交
-                self.on_orders_deal(order)
-                return
+            if len(hq):
+                ask1 = float(hq.loc[0, "ask1"])
+                bid1 = float(hq.loc[0, 'bid1'])
 
-            elif order.price_type == PriceType.LIMIT.value:
                 if order.order_type == OrderType.BUY.value:
-                    if order.order_price >= now_price:
-                        if order.status == Status.SUBMITTING.value:
-                            order.trade_price = now_price
-                        # 订单成交
-                        self.on_orders_deal(order)
+                    # 涨停
+                    if ask1 == 0:
                         return
+                    # 市价委托即时成交
+                    if order.price_type == PriceType.MARKET.value:
+                        order.order_price = ask1
+                        order.trade_price = ask1
+                        self.on_order_deal(order)
+                        return True
+                    # 限价委托
+                    elif order.price_type == PriceType.LIMIT.value:
+                        if order.order_price >= ask1:
+                            order.trade_price = ask1
+                            # 订单成交
+                            self.on_order_deal(order)
+                            return True
                 else:
-                    if order.order_price <= now_price:
-                        if order.status == Status.SUBMITTING.value:
-                            order.trade_price = now_price
-                        # 订单成交
-                        self.on_orders_deal(order)
+                    # 跌停
+                    if bid1 == 0:
                         return
+                    # 市价委托即时成交
+                    if order.price_type == PriceType.MARKET.value:
+                        order.order_price = bid1
+                        order.trade_price = bid1
+                        self.on_order_deal(order)
+                        return True
+                    # 限价委托
+                    elif order.price_type == PriceType.LIMIT.value:
+                        if order.order_price <= bid1:
+                            order.trade_price = bid1
+                            # 订单成交
+                            self.on_order_deal(order)
+                            return True
+        except Exception as e:
+            self.write_log(traceback.format_exc())
+            return False
 
-            # 没有成交更新订单状态
-            self.on_orders_status_modify(order)
-
-    def on_orders_deal(self, order: Order):
+    def on_order_deal(self, order: Order):
         """订单成交"""
         order.traded = order.volume
         order.trade_type = self.turnover_mode
 
         on_order_deal(order, self.db)
 
-    def on_orders_status_modify(self, order):
-        """更新订单状态"""
+    def on_order_status_modify(self, order):
+        """更新订单信息"""
         raw_data = {}
         raw_data['flt'] = {'order_id': order.order_id}
-        raw_data["set"] = {'$set': {'status': Status.NOTTRADED.value}}
+        raw_data["set"] = {'$set': {'status': order.status}}
         db_data = DBData(
-            db_name=SETTINGS['ORDERS_BOOK'],
+            db_name=SETTINGS['TRADE_DB'],
             db_cl=self.market_name,
             raw_data=raw_data
         )
@@ -130,9 +147,13 @@ class Exchange:
             orders = query_orders_today(account_id, self.db)
             if isinstance(orders, list):
                 for order in orders:
-                    if order['status'] in [Status.NOTTRADED.value, Status.PARTTRADED.value]:
+                    if order['status'] in [ Status.SUBMITTING.value,
+                                            Status.NOTTRADED.value,
+                                            Status.PARTTRADED.value]:
                         order = order_generate(order)
                         self.orders_book[order.order_id] = order
+
+        self.write_log(f"加载未处理订单共计：{str(len(self.orders_book))}条")
 
     def on_rejected_all(self):
         """拒绝所有订单"""
@@ -197,22 +218,19 @@ class Exchange:
 
     def time_verification(self):
         """交易时间验证"""
-        result = True
+        result = False
         now = datetime.now().time()
         time_dict = {
             "1": (time(9, 15), time(11, 30)),
             "2": (time(13, 0), time(15, 0))
         }
         for k, time_check in time_dict.items():
-            if not (now >= time_check[0] and now <= time_check[1]):
-                result = False
-            else:
+            if (now >= time_check[0] and now <= time_check[1]):
                 result = True
 
-        if now >= time(15, 1):
+        if now >= time(15, 0):
             # 市场关闭
             self.on_close()
-            result = False
 
         return result
 
@@ -295,7 +313,7 @@ class BacktestMarket(Exchange):
                 # 订单成交
                 # 回测使用委托价格作为成交价格
                 order.trade_price = order.order_price
-                self.on_orders_deal(order)
+                self.on_order_deal(order)
 
         except Exception as e:
             event = Event(EVENT_ERROR, traceback.format_exc())
@@ -322,7 +340,7 @@ class ChinaAMarket(Exchange):
         super(ChinaAMarket, self).__init__(event_engine)
 
         self.market_name = "china_a_market"            # 交易市场名称
-        self.hq_client = TushareService()              # 行情源
+        self.hq_client = PYTDXService()                # 行情源
         self.exchange_symbols = ["SH", "SZ"]           # 交易市场标识
         self.turnover_mode = TradeType.T_PLUS1.value   # 回转交易模式
 
@@ -330,14 +348,13 @@ class ChinaAMarket(Exchange):
         """交易撮合"""
         self.db = db
         self.write_log("{}：交易市场已开启".format(self.market_name))
-
-        # 行情连接
-        self.hq_client.connect_api()
-
-        # 加载当日未成交的订单
-        self.load_orders_today()
-
         try:
+            # 行情连接
+            self.hq_client.connect_api()
+
+            # 加载当日未成交的订单
+            self.load_orders_today()
+
             while self._active:
                 # 交易时间检验
                 if not self.time_verification():
@@ -346,9 +363,13 @@ class ChinaAMarket(Exchange):
                 if not self.orders_book:
                     continue
 
-                for order in self.orders_book.values():
+                # 复制交易簿
+                orders = copy.copy(self.orders_book)
+                for order_id, order in orders.items():
+                    sleep(1)
                     # 订单撮合
-                    self.on_orders_match(order)
+                    if self.on_orders_match(order):
+                        del self.orders_book[order_id]
 
         except Exception as e:
             event = Event(EVENT_ERROR, traceback.format_exc())
@@ -372,8 +393,13 @@ class ChinaAMarket(Exchange):
         else:
             # 订单验证
             if not self.on_back_verification(order):
-                return False
+                # 验证失败拒单
+                on_order_refuse(order, self.db)
             else:
+                # 更新订单状态及信息
+                order.status = Status.NOTTRADED.value
+                self.on_order_status_modify(order)
+                self.write_log(f"收到订单:{order_id}")
                 # 将订单添加到订单薄
                 self.orders_book[order_id] = order
                 return True

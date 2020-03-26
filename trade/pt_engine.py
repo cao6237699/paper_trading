@@ -7,18 +7,15 @@ from threading import Thread
 from email.message import EmailMessage
 
 from paper_trading.api.db import MongoDBService
+from paper_trading.api.pytdx_api import PYTDXService
 from paper_trading.utility.model import LogData
 from paper_trading.utility.setting import SETTINGS
 from paper_trading.event import EventEngine, Event
-from paper_trading.trade.market import Exchange, ChinaAMarket
+from paper_trading.trade.market import ChinaAMarket
 from paper_trading.utility.event import (
     EVENT_ERROR,
     EVENT_LOG,
     EVENT_MARKET_CLOSE
-)
-from paper_trading.trade.report_builder import (
-    calculate_result,
-    trade_statistics
 )
 
 
@@ -117,22 +114,17 @@ class MainEngine():
 
     def creat_db(self):
         """实例化数据库"""
-        host = self._settings.get('MONGO_HOST')
-        port = self._settings.get('MONGO_PORT')
+        host = self._settings.get('MONGO_HOST', "localhost")
+        port = self._settings.get('MONGO_PORT', 27017)
         db = MongoDBService(host, port)
         return db
 
-    def get_report(self, token, start, end):
-        """获取交易报告"""
-        captial, account_df, pos_df, trade_df = calculate_result(token, self.db, start, end)
+    def creat_hq_api(self):
+        """实例化行情源"""
+        tdx = PYTDXService()
+        tdx.connect_api()
 
-        if not len(trade_df):
-            return "成交记录为空，无法计算"
-
-        # 获取分析报告
-        statistics = trade_statistics(captial, account_df, pos_df, trade_df)
-
-        return statistics
+        return tdx
 
     def write_log(self, msg: str, level: int = logging.INFO):
         """"""

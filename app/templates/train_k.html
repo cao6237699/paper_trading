@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %} 训练 {% endblock %}
+
+{% block nav %}
+<!-- nav -->
+
+  <nav id="nav" class="nav-primary visible-lg nav-vertical">
+
+     <ul class="nav" data-spy="affix" data-offset-top="50">
+		<li><a href="{{url_for('main_blue.my_account')}}"><i class="icon-user icon-xlarge"></i>账户</a></li>
+		<li><a href="{{url_for('main_blue.my_trade')}}"><i class="icon-money icon-xlarge"></i>交易</a></li>
+		<li class="active"><a href="{{url_for('main_blue.my_train_k')}}"><i class="icon-gamepad icon-xlarge"></i>训练</a></li>
+		<li><a href="{{url_for('main_blue.trade_review')}}"><i class="icon-dashboard icon-xlarge"></i>回看</a></li>
+	 </ul>
+
+  </nav>
+
+<!-- / nav -->
+{% endblock %}
+
+{% block content %}
+  
+	<section id="content">
+
+        <section class="main padder">
+
+			<div class="clearfix">
+
+				<h4><i class="icon-edit"></i>K线训练</h4>
+
+			</div>
+
+			<div class="row">
+
+				<div class="col-lg-6">
+					<div id="k_show"></div>
+					<section class="panel">
+
+						col-lg-6
+
+					</section>
+
+				</div>
+
+				<div class="col-lg-6">
+					<div id="real_show"></div>
+					<section class="panel">
+
+						col-lg-6
+
+					</section>
+
+				</div>
+
+			</div>
+
+			<div class="row">
+
+				<div class="col-lg-6">
+					<section class="panel">
+
+					<header class="panel-heading">
+
+						<ul class="nav nav-tabs nav-justified">
+
+						<li class="active"><a href="#account" data-toggle="tab">账户</a></li>
+
+						<li><a href="#pos" data-toggle="tab">持仓</a></li>
+
+						<li><a href="#orders" data-toggle="tab">订单</a></li>
+
+						<li><a href="#others" data-toggle="tab">消息</a></li>
+
+					  	</ul>
+
+					</header>
+
+					<div class="tab-content">
+
+					  <div class="tab-pane active" id="account">
+						  <section class="panel">
+							  <div class="pull-out">
+								  <table class="table table-bordered m-b-none ta" data-ride="datatables">
+								  <thead>
+								      <tr>
+										  <th width="30%">总资产</th>
+										  <th width="30%">可用资金</th>
+										  <th width="30%">证券市值</th>
+										  <th width="10%"></th>
+								      </tr>
+								  </thead>
+								  <tbody>
+								  </tbody>
+							    </table>
+							  </div>
+						  </section>
+					  </div>
+
+					  <div class="tab-pane" id="pos">持仓</div>
+
+					  <div class="tab-pane" id="orders">订单</div>
+
+					  <div class="tab-pane" id="others">消息</div>
+
+					</div>
+
+				  </section>
+
+				</div>
+
+				<div class="col-lg-6">
+
+					<div class="row">
+
+						<div class="col-lg-6">
+
+							<section class="panel">
+
+								<form class="form-horizontal" method="get" data-validate="parsley">
+
+									<div class="form-group">
+
+										<label class="col-lg-3 control-label">证券代码</label>
+
+										<div class="col-lg-8">
+
+											<input type="text" name="code" data-required="true" class="form-control parsley-validated">
+
+										</div>
+
+									</div>
+
+									<div class="form-group">
+
+										<label class="col-lg-3 control-label">证券名称</label>
+
+										<div class="col-lg-8">
+
+											<input type="text" name="codeName" data-required="true" class="form-control parsley-validated">
+
+										</div>
+
+									</div>
+
+									<div class="form-group">
+
+										<label class="col-lg-3 control-label">委托价格</label>
+
+										<div class="col-lg-8">
+
+											<input type="text" name="price" data-required="true" class="form-control parsley-validated">
+
+										</div>
+
+									</div>
+
+									<div class="form-group">
+
+										<label class="col-lg-3 control-label">委托数量</label>
+
+										<div class="col-lg-8">
+
+											<input type="text" name="num" data-required="true" class="form-control parsley-validated">
+
+										</div>
+
+									</div>
+
+									<div class="form-group">
+
+										<div class="col-lg-4 col-offset-2">
+
+											<button id="clear" type="submit" class="btn btn-white">清空</button>
+
+										</div>
+
+										<div class="col-lg-1">
+
+											<button id="send" type="submit" class="btn btn-primary">下单</button>
+
+										</div>
+
+									</div>
+
+								</form>
+
+						    </section>
+
+						</div>
+
+						<div class="col-lg-3">
+
+							<section class="panel">
+
+								col-lg-4
+
+						  	</section>
+
+						</div>
+
+						<div class="col-lg-3">
+
+							<section class="panel">
+
+								col-lg-4
+
+						  	</section>
+
+						</div>
+
+					</div>
+
+				</div>
+
+			</div>
+
+		</section>
+
+	</section>
+
+{% endblock %}
+
+{% block script %}
+    <script type="text/javascript">
+        $SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+    </script>
+
+    <script type="text/javascript" src="{{url_for('static', filename='highcharts/highstock.js')}}"></script>
+    <script type="text/javascript" src="{{url_for('static', filename='js/datatables/jquery.dataTables.min.js')}}"></script>
+
+    <script type="text/javascript">
+        $(document).ready(function () {
+
+        });
+    </script>
+{% endblock %}

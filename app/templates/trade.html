@@ -1,0 +1,663 @@
+{% extends "base.html" %}
+
+{% block title %} 交易 {% endblock %}
+
+{% block head %}
+
+
+{% endblock %}
+
+{% block nav %}
+<!-- nav -->
+
+	<nav id="nav" class="nav-primary visible-lg nav-vertical">
+		<ul class="nav" data-spy="affix" data-offset-top="50">
+		  	<li><a href="{{url_for('main_blue.my_account')}}"><i class="icon-user icon-xlarge"></i>账户</a></li>
+		  	<li class="active"><a href="{{url_for('main_blue.my_trade')}}"><i class="icon-money icon-xlarge"></i>交易</a></li>
+		  	<li><a href="{{url_for('main_blue.my_train_k')}}"><i class="icon-gamepad icon-xlarge"></i>训练</a></li>
+		  	<li><a href="{{url_for('main_blue.trade_review')}}"><i class="icon-dashboard icon-xlarge"></i>回看</a></li>
+	  	</ul>
+  	</nav>
+
+<!-- / nav -->
+{% endblock %}
+
+{% block content %}
+
+	<section id="content">
+
+		<section class="main padder">
+
+			<div class="clearfix">
+
+				<h4><i class="icon-edit"></i>模拟交易</h4>
+
+			</div>
+
+			<div class="line line-dashed m-t-large"></div>
+
+			<div class="row">
+				<div class="col-lg-6">
+					<div id="refresh" class="pull-left">
+						<a href="#" class="btn btn-mini btn-white btn-circle"><i class="icon-refresh"></i></a>
+					</div>
+				</div>
+				<div class="col-lg-6">
+					<div id="acc_select" class="select btn-group m-b pull-right" data-resize="auto">
+						<button type="button" data-toggle="dropdown" class="btn btn-white btn-small dropdown-toggle">
+							<span class="dropdown-label" style="width: 66px;">请选择账号</span> <span class="caret"></span>
+						</button>
+						<ul id="acc_list" class="dropdown-menu">
+						</ul>
+					</div>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="col-lg-9">
+					<section class="panel">
+						<header class="panel-heading">
+							<i class="icon-usd"></i>账户
+						</header>
+						<div class="pull-out">
+							<table id="assets_table" class="table table-striped m-b-none text-small">
+								<thead>
+								<tr>
+									<th width="25%">总资产</th>
+									<th width="25%">可用资金</th>
+									<th width="25%">证券市值</th>
+									<th width="25%">证券占比</th>
+								</tr>
+								</thead>
+								<tbody>
+								<tr>
+									<td>0</td>
+									<td>0</td>
+									<td>0</td>
+									<td>0%</td>
+
+								</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+
+					<div class="line line-dashed m-t-large"></div>
+
+					<section class="panel">
+						<header class="panel-heading">
+							<i class="icon-folder-close-alt"></i>持仓
+						</header>
+						<div class="pull-out">
+							<table id="pos_table" class="table table-striped m-b-none text-small">
+								<thead>
+								<tr>
+									<th width="10%">证券代码</th>
+									<th width="10%">买入日期</th>
+									<th width="15%">总持仓</th>
+									<th width="15%">可用持仓</th>
+									<th width="15%">买入均价</th>
+									<th width="10%">当前价格</th>
+									<th width="15%">盈亏金额</th>
+									<th width="10%">操作</th>
+								</tr>
+								</thead>
+								<tbody id="pos_tbody">
+								<tr>
+									<td>0</td>
+									<td>0</td>
+									<td>0</td>
+									<td>0</td>
+									<td>0</td>
+									<td>0</td>
+									<td>0</td>
+									<td>0</td>
+								</tr>
+								</tbody>
+							</table>
+						</div>
+					</section>
+				</div>
+
+				<div class="col-lg-3">
+					<div class="row">
+						<div class="col-lg-12">
+							<section class="panel">
+								<header class="panel-heading">
+									<ul class="nav nav-tabs nav-justified">
+										<li class="active"><a href="#buy_tab" data-toggle="tab">买入</a></li>
+										<li><a id="sell_show" href="#sell_tab" data-toggle="tab">卖出</a></li>
+									</ul>
+								</header>
+								<div class="tab-content">
+									<div class="tab-pane active" id="buy_tab">
+										<form class="form-horizontal" method="post" data-validate="parsley">
+											<div class="form-group">
+												<label class="col-lg-4 control-label">证券代码</label>
+												<div class="col-lg-8">
+													<input id="code_buy" type="text" name="order_text" data-required="true" class="form-control parsley-validated">
+												</div>
+											</div>
+											<div class="form-group">
+												<label class="col-lg-4 control-label">证券名称</label>
+												<div class="col-lg-8">
+													<input id="name_buy" type="text" name="order_text" disabled="disabled" class="form-control parsley-validated">
+												</div>
+											</div>
+											<div class="form-group">
+												<label class="col-lg-4 control-label">委托价格</label>
+												<div class="col-lg-8">
+													<input id="price_buy" type="text" name="order_text" data-required="true" class="form-control parsley-validated">
+												</div>
+											</div>
+											<div class="form-group">
+												<label class="col-lg-4 control-label">可买数量</label>
+												<div class="col-lg-8">
+													<input id="avl_buy" type="text" name="order_text" disabled="disabled" class="form-control parsley-validated">
+												</div>
+											</div>
+											<div class="form-group">
+												<label class="col-lg-4 control-label">委托数量</label>
+												<div class="col-lg-8">
+													<input id="num_buy" type="text" name="order_text" data-required="true" class="form-control parsley-validated">
+												</div>
+											</div>
+											<div class="form-group">
+												<div class="col-lg-4">
+													<div class="radio">
+														<label class="radio-custom">
+															<input type="radio" name="radio_buy">
+															<i class="icon-circle-blank"></i>
+															1/4
+														</label>
+													</div>
+												</div>
+												<div class="col-lg-4">
+													<div class="radio">
+														<label class="radio-custom">
+															<input type="radio" name="radio_buy">
+															<i class="icon-circle-blank"></i>
+															1/2
+														</label>
+													</div>
+												</div>
+												<div class="col-lg-4">
+													<div class="radio">
+														<label class="radio-custom">
+															<input type="radio" name="radio_buy">
+															<i class="icon-circle-blank"></i>
+															全
+														</label>
+													</div>
+												</div>
+											</div>
+											<div class="form-group">
+												<div class="col-lg-4 col-offset-2">
+													<button id="clear_buy" type="reset" class="btn btn-white">清空</button>
+												</div>
+												<div class="col-lg-1">
+													<button id="buy" type="submit" class="btn btn-danger">买入</button>
+												</div>
+											</div>
+										</form>
+									</div>
+
+									<div class="tab-pane" id="sell_tab">
+										<form class="form-horizontal" method="post" data-validate="parsley">
+											<div class="form-group">
+												<label class="col-lg-4 control-label">证券代码</label>
+												<div class="col-lg-8">
+													<input id="code_sell" type="text" name="order_text" data-required="true" class="form-control parsley-validated">
+												</div>
+											</div>
+											<div class="form-group">
+												<label class="col-lg-4 control-label">证券名称</label>
+												<div class="col-lg-8">
+													<input id="name_sell" type="text" name="order_text" disabled="disabled" class="form-control parsley-validated">
+												</div>
+											</div>
+											<div class="form-group">
+												<label class="col-lg-4 control-label">委托价格</label>
+												<div class="col-lg-8">
+													<input id="price_sell" type="text" name="order_text" data-required="true" class="form-control parsley-validated">
+												</div>
+											</div>
+											<div class="form-group">
+												<label class="col-lg-4 control-label">可卖数量</label>
+												<div class="col-lg-8">
+													<input id="avl_sell" type="text" name="order_text" disabled="disabled" class="form-control parsley-validated">
+												</div>
+											</div>
+											<div class="form-group">
+												<label class="col-lg-4 control-label">委托数量</label>
+												<div class="col-lg-8">
+													<input id="num_sell" type="text" name="order_text" data-required="true" class="form-control parsley-validated">
+												</div>
+											</div>
+											<div class="form-group">
+												<div class="col-lg-4">
+													<div class="radio">
+														<label class="radio-custom">
+															<input type="radio" name="radio_sell">
+															<i class="icon-circle-blank"></i>
+															1/4
+														</label>
+													</div>
+												</div>
+												<div class="col-lg-4">
+													<div class="radio">
+														<label class="radio-custom">
+															<input type="radio" name="radio_sell">
+															<i class="icon-circle-blank"></i>
+															1/2
+														</label>
+													</div>
+												</div>
+												<div class="col-lg-4">
+													<div class="radio">
+														<label class="radio-custom">
+															<input type="radio" name="radio_sell">
+															<i class="icon-circle-blank"></i>
+															全
+														</label>
+													</div>
+												</div>
+											</div>
+											<div class="form-group">
+												<div class="col-lg-4 col-offset-2">
+													<button id="clear_sell" type="reset" class="btn btn-white">清空</button>
+												</div>
+												<div class="col-lg-1">
+													<button id="sell" type="submit" class="btn btn-success">卖出</button>
+												</div>
+											</div>
+										</form>
+									</div>
+								</div>
+							</section>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="line line-dashed m-t-large"></div>
+
+			<div class="row">
+				<div class="col-lg-12">
+					<section class="panel">
+						<header class="panel-heading"><i class="icon-beer"></i>订单</header>
+						<table id="order_table" class="table table-striped m-b-none">
+							<thead>
+							<tr>
+								<th width="10%">证券代码</th>
+								<th width="10%">委托日期</th>
+								<th width="10%">委托时间</th>
+								<th width="10%">委托类型</th>
+								<th width="10%">委托价格</th>
+								<th width="10%">成交价格</th>
+								<th width="10%">成交数量</th>
+								<th width="10%">委托状态</th>
+								<th width="15%">操作</th>
+							</tr>
+							</thead>
+							<tbody id="order_tbody">
+							</tbody>
+						</table>
+					</section>
+				</div>
+			</div>
+		</section>
+
+	</section>
+
+{% endblock %}
+
+{% block script %}
+
+	<script type="text/javascript">
+		$SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+	</script>
+
+	<script type="text/javascript" src="{{url_for('static', filename='highcharts/highstock.js')}}"></script>
+	<script type="text/javascript" src="{{url_for('static', filename='js/datatables/datatables.min.js')}}"></script>
+
+	<script type="text/javascript">
+		$(document).ready(function () {
+			var my_token;
+			var my_money;
+
+			//datatable
+			var ordersTable = $('#order_table').DataTable({
+				"ajax":{
+					"url":"/orders_today_page",
+					"type":"post",
+					"data":function (e) {
+						e.token=my_token
+					}
+				},
+				"order":[[1, 'asc'], [2, 'asc']],
+				'aoColumns':[
+					{"mData":"code"},
+					{"mData":"order_date"},
+					{"mData":"order_time"},
+					{"mData":"order_type"},
+					{"mData":"order_price"},
+					{"mData":"trade_price"},
+					{"mData":"traded"},
+					{"mData":"status"},
+					{
+						'data':null,
+						'defaultContent':''
+					}]
+			});
+
+			// 绑定账户页面，保存按钮点击
+			$('#account_bind').click(function() {
+				var tk = $('#account_token').val().trim();
+
+				if(tk == null||tk == undefined||tk == ""){
+					alert("token不能为空");
+					return false;
+				}
+
+				// post给服务器验证token是否存在
+				// 如果存在则加入到账户选择控件上，如果不存在则报错
+				$.post("/account", {token:tk},
+						function(data, status){
+						if(data.status == true){
+							acc_tk = data.data.account_id;
+							acc_name = data.data.account_info;
+							acc_bind(acc_tk, acc_name);
+							$('#account_token').val("");
+
+							$('#accountAdd').modal('hide')
+						}else{
+							alert(data.data)
+						}
+				},'json');
+			});
+
+			// 绑定到账户控件上
+			function acc_bind(acc_id, acc_name) {
+				// 添加账户
+				$('#acc_list').append("<li class=\"acc_list_li\" data-value=\""+acc_id+"\"><a href=\"#\">"+acc_name+"</a></li>");
+			}
+
+			// 账户选择账户控件选中事件
+			$('#acc_list').on('click', "li", function () {
+				// 当前账户数据
+				var acc_name = $(this).children('a').text();
+				var acc_tk = $(this).attr('data-value');
+				my_token = acc_tk;
+				$('#acc_select').find('.dropdown-label').text(acc_name);
+
+				// 刷新信息
+				info_refresh()
+
+			});
+
+			// 刷新信息
+			function info_refresh() {
+				// 查询账户信息并显示
+				acc_update();
+				// 查询账户持仓数据并显示
+				pos_update();
+				// 查询账户订单数据并显示
+				order_update();
+			}
+
+			// 更新账户表
+			function acc_update() {
+				$.post("/account", {token:my_token},
+						function(data, status){
+						if(data.status == true){
+							var assets=data.data.assets;
+							var available = data.data.available;
+							my_money = data.data.available;
+							var market_value = data.data.market_value;
+							var ratio = (parseFloat(market_value)/parseFloat(assets)) * 100;
+							acc_show(assets, available, market_value, ratio.toFixed(2));
+						}
+				},'json');
+			}
+
+			// 账户表显示
+			function acc_show(assets, available, market_value, ratio) {
+				$('#assets_table').children('tbody').empty();
+				$('#assets_table').children('tbody').append("<tr>\n" +
+						"\t\t\t\t\t\t\t\t\t<td>"+assets+"</td>\n" +
+						"\t\t\t\t\t\t\t\t\t<td>"+available+"</td>\n" +
+						"\t\t\t\t\t\t\t\t\t<td>"+market_value+"</td>\n" +
+						"\t\t\t\t\t\t\t\t\t<td>"+ratio+"%</td>\n" +
+						"\n" +
+						"\t\t\t\t\t\t\t\t</tr>");
+			}
+
+			// 更新持仓表
+			function pos_update() {
+				// 清空数据
+				$('#pos_table').children('tbody').empty();
+				$.post("/pos", {token:my_token},
+						function(data, status){
+						if(data.status == true){
+							// 判断是否有数据
+							if(typeof data.data != "string") {
+								$.each(data.data, function (n, pos) {
+									var code = pos.code;
+									var buy_date = pos.buy_date;
+									var volume = pos.volume;
+									var available = pos.available;
+									var buy_price = pos.buy_price;
+									var now_price = pos.now_price;
+									var profit = (pos.profit).toFixed(2);
+									$('#pos_table').children('tbody').append("<tr>\n" +
+											"\t\t\t\t\t\t\t\t\t<td>"+code+"</td>\n" +
+											"\t\t\t\t\t\t\t\t\t<td>"+buy_date+"</td>\n" +
+											"\t\t\t\t\t\t\t\t\t<td>"+volume+"</td>\n" +
+											"\t\t\t\t\t\t\t\t\t<td>"+available+"</td>\n" +
+											"\t\t\t\t\t\t\t\t\t<td>"+buy_price+"</td>\n" +
+											"\t\t\t\t\t\t\t\t\t<td>"+now_price+"</td>\n" +
+											"\t\t\t\t\t\t\t\t\t<td>"+profit+"</td>\n" +
+											"\t\t\t\t\t\t\t\t\t<td><a href=\"#\" class='btn-success sell_link'><i class=\"icon-bitbucket\"></i>卖</a></td>\n" +
+											"\t\t\t\t\t\t\t\t</tr>");
+								});
+							}
+						}
+				},'json');
+			}
+
+			// 更新订单表
+			function order_update() {
+				ordersTable.ajax.reload()
+			}
+
+			// 买入按钮点击事件
+			$('#buy').click(function (event) {
+				var error_num = 0;
+				var order;
+
+				if(my_token == null||my_token == undefined||my_token == ""){
+					alert("请选择账号");
+					error_num += 1;
+				}
+
+				// 获取日期和时间
+				var now_date = getnowtime();
+				var date_array = now_date.split(' ');
+				var d = date_array[0];
+				var t = date_array[1];
+
+				// 获取输入的数据
+				var code = $('#code_buy').val();
+				if(code == null||code == undefined||code == ""){
+					error_num += 1;
+				}
+				var price = $('#price_buy').val();
+				if(price == null||price == undefined||price == ""){
+					error_num += 1;
+				}
+				var vol = $('#num_buy').val();
+				if(vol == null||vol == undefined||vol == ""){
+					error_num += 1;
+				}
+				if(error_num == 0){
+					order = {
+						"code":code,
+						"exchange":getExchange(code),
+						"account_id":my_token,
+						"order_type":"buy",
+						"order_price":parseFloat(price),
+						"vol":parseFloat(vol),
+						"order_date":d,
+						"order_time":t
+					};
+					order_json = JSON.stringify(order);
+					$.post('/send',{order:order_json},
+						function (data, status) {
+							if(data.status==true){
+								// 清空信息
+								$('#clear_buy').click();
+								// 刷新信息
+								setTimeout(info_refresh, 1000);
+							}else{
+								alert(data.data)
+							}
+					}, 'json');
+				}
+			});
+
+			// 卖出按钮点击事件
+			$('#sell').click(function () {
+				var error_num = 0;
+				var order;
+
+				if(my_token == null||my_token == undefined||my_token == ""){
+					alert("请选择账号");
+					return false;
+				}
+
+				// 获取日期和时间
+				var now_date = getnowtime();
+				var date_array = now_date.split(' ');
+				var d = date_array[0];
+				var t = date_array[1];
+
+				// 获取输入的数据
+				var code = $('#code_sell').val();
+				if(code == null||code == undefined||code == ""){
+					error_num += 1;
+				}
+				var price = $('#price_sell').val();
+				if(price == null||price == undefined||price == ""){
+					error_num += 1;
+				}
+				var vol = $('#num_sell').val();
+				if(vol == null||vol == undefined||vol == ""){
+					error_num += 1;
+				}
+				if(error_num == 0){
+					order = {
+						"code":code,
+						"exchange":getExchange(code),
+						"account_id":my_token,
+						"order_type":"sell",
+						"order_price":parseFloat(price),
+						"vol":parseFloat(vol),
+						"order_date":d,
+						"order_time":t
+					};
+					order_json = JSON.stringify(order);
+					$.post('/send',{order:order_json},
+						function (data, status) {
+							if(data.status==true){
+								// 清空信息
+								$('#clear_sell').click();
+
+								// 刷新信息
+								setTimeout(info_refresh, 1000);
+
+							}else{
+								alert(data.data)
+							}
+					}, 'json');
+				}
+			});
+
+			// 阻止submit动作
+			$('form').submit(function (e) {
+				e.preventDefault();
+			});
+
+			// 快速卖出按钮
+			$('#pos_tbody').on('click', 'a', function () {
+				// 获取本行的数据
+				var code = $(this).parent().siblings("td").eq(0).text();
+
+				// 切换卖出界面
+				$('#sell_show').click();
+
+				//自动填写信息
+				$('#code_sell').val(code);
+			});
+
+			// 刷新按钮点击事件
+			$('#refresh').click(function () {
+				info_refresh();
+			});
+
+			// 撤单按钮点击事件
+			$('#order_tbody').on('click', 'td',function () {
+
+			});
+
+			// 证券账号焦点消失事件
+			$('#code_buy').focusout(function () {
+
+			});
+
+			$('#code_sell').focusout(function () {
+
+			});
+
+			// 证券价格焦点消失事件
+			$('#price_buy').focusout(function () {
+
+			});
+
+			$('#price_sell').focusout(function () {
+
+			});
+
+			//获取日期和时间
+			function getnowtime() {
+                var nowtime = new Date();
+                var year = nowtime.getFullYear();
+                var month = padleft0(nowtime.getMonth() + 1);
+                var day = padleft0(nowtime.getDate());
+                var hour = padleft0(nowtime.getHours());
+                var minute = padleft0(nowtime.getMinutes());
+                var second = padleft0(nowtime.getSeconds());
+                var millisecond = nowtime.getMilliseconds();
+                millisecond = millisecond.toString().length == 1 ? "00" + millisecond : millisecond.toString().length == 2 ? "0" + millisecond : millisecond;
+                return year + "" + month + "" + day + " " + hour + ":" + minute + ":" + second;
+            }
+
+			//补齐两位数
+			function padleft0(obj) {
+				return obj.toString().replace(/^[0-9]{1}$/, "0" + obj);
+			}
+
+			//判断交易市场
+			function getExchange(code) {
+				var substr = code.charAt(0);
+				if(substr == '6'){
+					return "SH";
+				}else{
+					return "SZ"
+				}
+			}
+
+		});
+	</script>
+
+{% endblock %}

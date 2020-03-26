@@ -24,6 +24,9 @@ def main():
         if sys.argv[1] == "test":
             market = BacktestMarket
             config_name = ConfigType.TESTING.value
+        elif sys.argv[1] == "dev":
+            market = BacktestMarket
+            config_name = ConfigType.DEVELOPMENT.value
 
     param['MONGO_HOST'] = config[config_name].MONGO_HOST
     param['MONGO_PORT'] = config[config_name].MONGO_PORT

@@ -6,7 +6,6 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 class Config:
     DEBUG = False
-    TESTING = False
     SECRET_KEY = os.environ.get('SECRET_KEY') or "j1as78a1gf6a4ea1f5d6a78e41fa56e"
 
     @staticmethod
@@ -23,7 +22,15 @@ class TradingConfig(Config):
 
 
 class TestingConfig(Config):
-    TESTING = True
+    MONGO_HOST = "localhost"
+    MONGO_PORT = 27017
+    LOG_FILE_NAME = ""
+    LOG_FILE_PATH = ""
+    SERVER_HOST = "0.0.0.0"
+    SERVER_PORT = 5001
+
+class DevelopmentConfig(Config):
+    DEBUG = True
     MONGO_HOST = "localhost"
     MONGO_PORT = 27017
     LOG_FILE_NAME = ""
@@ -35,5 +42,6 @@ class TestingConfig(Config):
 config = {
     ConfigType.TESTING.value: TestingConfig,
     ConfigType.TRADING.value: TradingConfig,
+    ConfigType.DEVELOPMENT.value: DevelopmentConfig,
     ConfigType.DEFAULT.value: TradingConfig
 }

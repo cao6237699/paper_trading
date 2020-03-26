@@ -1,0 +1,1048 @@
+/*fuelux*/
+.radio-custom, .checkbox-custom{margin-left: -20px}
+.radio-custom input[type=radio], .checkbox-custom input[type=checkbox]{position: absolute;left: -9999em;}
+.radio-custom > i:before, .checkbox-custom > i:before{font-size: 1.333em;vertical-align: -10%;margin-left:0;margin-right: 4px;color: #ddd}
+.radio-custom > i.checked:before, .checkbox-custom > i.checked:before{color: #13c4a5}
+.radio-custom > i.disabled:before, .checkbox-custom > i.disabled:before{color: #eee}
+.radio-custom > i.checked:before{content: '\f111';}
+.checkbox-custom > i.checked:before{content: '\f046';}
+.spinner .input-group-btn{display: table-cell;min-width: 25px}
+.spinner .input-group-btn .btn{width:25px;padding: 0;font-size: 12px;margin-left: -1px;line-height: 1;height: 19px;overflow: hidden;border-radius: 0 4px 0 0 !important;}
+.spinner .input-group-btn .btn+.btn{height: 20px;border-radius: 0 0 4px 0 !important;}
+.spinner .input-small + .input-group-btn .btn{font-size: 10px;height: 15px;}
+.spinner .input-small + .input-group-btn .btn+.btn{height: 16px;}
+.select{position: relative;display: inline-block;}
+
+.pillbox{border: 1px solid #e0e4e8;padding: 10px;border-radius: 4px}
+.pillbox ul{margin: 0;list-style: none;padding:0;}
+.pillbox li{display: inline-block;font-size:12px;color: #fff;;padding: 6px 8px;cursor: pointer;margin:2px;float: left;}
+.pillbox li:after{content: " x";font-size: 11px;font-weight: normal;opacity: 0.6;filter: alpha(opacity=60);}
+.pillbox li:hover:after{opacity: 0.9;filter: alpha(opacity=90);}
+.pillbox input{border:none;outline:0;min-height: 24px;width: auto;display: inline-block;box-shadow: none;background: transparent;}
+
+.datagrid tfoot th{font-weight: normal;}
+.datagrid tfoot .grid-pager .combobox{max-width: 80px;position: relative;top: 10px}
+.datagrid tfoot .dropdown-menu{min-width: 60px;text-align: left;}
+.datagrid tbody{height: 256px;overflow:hidden;overflow-y:auto }
+#selectTextSize {position: absolute;top: 0;display: none;visibility: hidden;}
+
+.wizard {
+  font-size: 14px;
+  padding: 0;
+  background-color: #f7f8f9;
+  border-bottom: 1px solid #e0e4e8;
+  margin: -15px;
+}
+
+.wizard .badge{
+  margin-right: 4px;
+}
+.wizard .badge-info{
+  background-color: #5191d1;
+}
+.wizard .badge-success{
+  background-color: #3fcf7f;
+}
+.wizard ul li.complete,
+.wizard ul li.complete:hover{
+  cursor: pointer;
+  background: #f1f5f9;
+}
+.wizard ul li.complete:after{
+  border-left-color:#f1f5f9;
+}
+.wizard ul {
+  padding: 0;
+  margin: 0;
+  list-style: none outside none;
+}
+.wizard ul li {
+  position: relative;
+  float: left;
+  padding: 0 15px 0 25px;
+  margin: 0;
+  color: #999999;
+  cursor: default;
+  height: 40px;
+  line-height: 40px;
+}
+
+.wizard.wizard-vertical{float: left;border-bottom: none}
+.wizard.wizard-vertical + .step-content{zoom:1;overflow: hidden;padding-left: 40px}
+.wizard.wizard-vertical ul li {
+  position: relative;
+  float: none;
+  border-bottom: 1px solid #e0e4e8;
+  padding-left: 15px;
+}
+.wizard.wizard-vertical ul li:last-child{}
+
+.wizard ul li:first-child{
+  padding-left: 15px;
+  border-radius: 4px 0 0 0;
+}
+.wizard .actions{
+  float: right;
+  margin: 8px 10px 0 0;
+}
+
+.wizard ul li:before, .wizard ul li:after{
+  content: "";
+  position: absolute;
+  top: -1px;
+  bottom: -1px;
+  right: -10px;
+  border: 20px solid transparent;
+  border-right: 0;
+  border-left: 10px solid #e0e4e8;
+  z-index: 1;
+
+}
+.wizard ul li:after{
+  right: -9px;
+  border-left-color:#f7f8f9;
+  z-index: 2;
+}
+
+.wizard ul li.active {
+  color: #3a87ad;
+  background: #fff;
+}
+
+.wizard ul li.active:after{
+  border-left-color: #fff;
+}
+
+.step-content {
+}
+
+.step-content .step-pane {
+  display: none;
+}
+
+.step-content .step-pane.active {
+  display: inherit;
+}
+
+
+/*!
+ * Slider for Bootstrap
+ */
+.slider {
+  display: inline-block;
+  vertical-align: middle;
+  position: relative;
+}
+.slider.slider-horizontal {
+  width: 210px;
+  height: 20px;
+}
+.slider.slider-horizontal .slider-track {
+  height: 10px;
+  width: 100%;
+  margin-top: -5px;
+  top: 50%;
+  left: 0;
+}
+.slider.slider-horizontal .slider-selection {
+  height: 100%;
+  top: 0;
+  bottom: 0;
+}
+.slider.slider-horizontal .slider-handle {
+  margin-left: -10px;
+  margin-top: -5px;
+}
+.slider.slider-horizontal .slider-handle.triangle {
+  border-width: 0 10px 10px 10px;
+  width: 0;
+  height: 0;
+  border-bottom-color: #0480be;
+  margin-top: 0;
+}
+.slider.slider-vertical {
+  height: 210px;
+  width: 20px;
+}
+.slider.slider-vertical .slider-track {
+  width: 10px;
+  height: 100%;
+  margin-left: -5px;
+  left: 50%;
+  top: 0;
+}
+.slider.slider-vertical .slider-selection {
+  width: 100%;
+  left: 0;
+  top: 0;
+  bottom: 0;
+}
+.slider.slider-vertical .slider-handle {
+  margin-left: -5px;
+  margin-top: -10px;
+}
+.slider.slider-vertical .slider-handle.triangle {
+  border-width: 10px 0 10px 10px;
+  width: 1px;
+  height: 1px;
+  border-left-color: #0480be;
+  margin-left: 0;
+}
+.slider input {
+  display: none;
+}
+.slider .tooltip-inner {
+  white-space: nowrap;
+}
+.slider-track {
+  position: absolute;
+  cursor: pointer;
+  background-color: #e0e4e8;
+  -webkit-border-radius: 4px;
+  -moz-border-radius: 4px;
+  border-radius: 4px;
+}
+.slider-selection {
+  position: absolute;
+  background-color: #f3f4f5;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  -webkit-border-radius: 4px;
+  -moz-border-radius: 4px;
+  border-radius: 4px;
+}
+.slider-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  background-color: #13c4a5;
+  opacity: 0.8;
+  border: 0px solid transparent;
+}
+.slider-handle.round {
+  -webkit-border-radius: 20px;
+  -moz-border-radius: 20px;
+  border-radius: 20px;
+}
+.slider-handle.triangle {
+  background: transparent none;
+}
+
+
+/*!
+ * Datepicker for Bootstrap
+ *
+ * Copyright 2012 Stefan Petre
+ * Licensed under the Apache License v2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ */
+.datepicker {
+  top: 0;
+  left: 0;
+  padding: 4px;
+  -webkit-border-radius: 4px;
+  -moz-border-radius: 4px;
+  border-radius: 4px;
+  z-index: 1010;
+  /*.dow {
+    border-top: 1px solid #ddd !important;
+  }*/
+
+}
+.datepicker:before {
+  content: '';
+  display: inline-block;
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-bottom: 7px solid #ccc;
+  border-bottom-color: rgba(0, 0, 0, 0.2);
+  position: absolute;
+  top: -7px;
+  left: 6px;
+}
+.datepicker:after {
+  content: '';
+  display: inline-block;
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #ffffff;
+  position: absolute;
+  top: -6px;
+  left: 7px;
+}
+.datepicker > div {
+  display: none;
+}
+.datepicker table {
+  width: 100%;
+  margin: 0;
+}
+.datepicker td,
+.datepicker th {
+  text-align: center;
+  width: 20px;
+  height: 20px;
+  -webkit-border-radius: 4px;
+  -moz-border-radius: 4px;
+  border-radius: 4px;
+}
+.datepicker td.day:hover {
+  background: #eeeeee;
+  cursor: pointer;
+}
+.datepicker td.day.disabled {
+  color: #eeeeee;
+}
+.datepicker td.old,
+.datepicker td.new {
+  color: #ccc;
+}
+.datepicker td.active,
+.datepicker td.active:hover {
+  color: #ffffff;
+  background-color: #13c4a5;
+  color: #fff;
+}
+.datepicker td.active:hover,
+.datepicker td.active:hover:hover,
+.datepicker td.active:focus,
+.datepicker td.active:hover:focus,
+.datepicker td.active:active,
+.datepicker td.active:hover:active,
+.datepicker td.active.active,
+.datepicker td.active:hover.active,
+.datepicker td.active.disabled,
+.datepicker td.active:hover.disabled,
+.datepicker td.active[disabled],
+.datepicker td.active:hover[disabled] {
+  color: #ffffff;
+  background-color: #13c4a5;
+}
+.datepicker td span {
+  display: block;
+  width: 47px;
+  height: 43px;
+  line-height: 43px;
+  float: left;
+  margin: 2px;
+  cursor: pointer;
+  -webkit-border-radius: 4px;
+  -moz-border-radius: 4px;
+  border-radius: 4px;
+}
+.datepicker td span:hover {
+  background: #eeeeee;
+}
+.datepicker td span.active {
+  color: #ffffff;
+  background-color: #13c4a5;
+}
+.datepicker td span.active:hover,
+.datepicker td span.active:focus,
+.datepicker td span.active:active,
+.datepicker td span.active.active,
+.datepicker td span.active.disabled,
+.datepicker td span.active[disabled] {
+  color: #ffffff;
+  background-color: #13c4a5;
+}
+
+.datepicker td span.old {
+  color: #999999;
+}
+.datepicker th.switch {
+  width: 145px;
+}
+.datepicker th.next,
+.datepicker th.prev {
+  font-size: 21px;
+}
+.datepicker thead tr:first-child th {
+  cursor: pointer;
+}
+.datepicker thead tr:first-child th:hover {
+  background: #eeeeee;
+}
+.input-append.date .add-on i,
+.input-prepend.date .add-on i {
+  display: block;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+
+/*!
+ * FullCalendar v1.6.1 Stylesheet
+ * Docs & License: http://arshaw.com/fullcalendar/
+ * (c) 2013 Adam Shaw
+ */
+
+
+.fc {
+  direction: ltr;
+  text-align: left;
+  }
+  
+.fc table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  }
+  
+html .fc,
+.fc table {
+  font-size: 1em;
+  }
+  
+.fc td,
+.fc th {
+  padding: 0;
+  vertical-align: top;
+  }
+
+
+
+/* Header
+------------------------------------------------------------------------*/
+.fc-header{background: #f7f8f9}
+.fc-header td {
+  padding:12px 10px 0 10px;
+  white-space: nowrap;
+  }
+
+.fc-header-left {
+  width: 25%;
+  text-align: left;
+  }
+  
+.fc-header-center {
+  text-align: center;
+  }
+  
+.fc-header-right {
+  width: 25%;
+  text-align: right;
+  }
+  
+.fc-header-title {
+  display: inline-block;
+  vertical-align: top;
+  }
+  
+.fc-header-title h2 {
+  font-size: 16px;
+  margin-top: 6px;
+  margin-bottom: 0;
+  white-space: nowrap;
+  }
+  
+.fc .fc-header-space {
+  padding-left: 10px;
+  }
+  
+.fc-header .fc-button {
+  margin-bottom: 1em;
+  vertical-align: top;
+  }
+  
+/* buttons edges butting together */
+
+.fc-header .fc-button {
+  margin-right: -1px;
+  }
+  
+.fc-header .fc-corner-right,  /* non-theme */
+.fc-header .ui-corner-right { /* theme */
+  margin-right: 0; /* back to normal */
+  }
+  
+/* button layering (for border precedence) */
+  
+.fc-header .fc-state-hover,
+.fc-header .ui-state-hover {
+  z-index: 2;
+  }
+  
+.fc-header .fc-state-down {
+  z-index: 3;
+  }
+
+.fc-header .fc-state-active,
+.fc-header .ui-state-active {
+  z-index: 4;
+  }
+  
+  
+  
+/* Content
+------------------------------------------------------------------------*/
+  
+.fc-content {
+  clear: both;
+  }
+  
+.fc-view {
+  width: 100%; /* needed for view switching (when view is absolute) */
+  overflow: hidden;
+  }
+  
+  
+
+/* Cell Styles
+------------------------------------------------------------------------*/
+
+.fc-widget-header,    /* <th>, usually */
+.fc-widget-content {  /* <td>, usually */
+  border: 1px solid #ddd;
+  }
+  
+.fc-state-highlight { /* <td> today cell */ /* TODO: add .fc-today to <th> */
+  background: #fcf8e3;
+  }
+  
+.fc-cell-overlay { /* semi-transparent rectangle while dragging */
+  background: #bce8f1;
+  opacity: .3;
+  filter: alpha(opacity=30); /* for IE */
+  }
+  
+
+
+/* Buttons
+------------------------------------------------------------------------*/
+
+.fc-button {
+  position: relative;
+  display: inline-block;
+  padding: 0 .6em;
+  overflow: hidden;
+  height: 1.9em;
+  line-height: 1.8em;
+  white-space: nowrap;
+  cursor: pointer;
+  }
+  
+.fc-state-default { /* non-theme */
+  border: 1px solid;
+  }
+
+.fc-state-default.fc-corner-left { /* non-theme */
+  border-top-left-radius: 4px;
+  border-bottom-left-radius: 4px;
+  }
+
+.fc-state-default.fc-corner-right { /* non-theme */
+  border-top-right-radius: 4px;
+  border-bottom-right-radius: 4px;
+  }
+
+/*
+  Our default prev/next buttons use HTML entities like &lsaquo; &rsaquo; &laquo; &raquo;
+  and we'll try to make them look good cross-browser.
+*/
+
+.fc-text-arrow {
+  margin: 0 .1em;
+  font-size: 2em;
+  line-height: 0.85;
+  font-family: "Courier New", Courier, monospace;
+  vertical-align: baseline; /* for IE7 */
+  }
+
+.fc-button-prev .fc-text-arrow,
+.fc-button-next .fc-text-arrow { /* for &lsaquo; &rsaquo; */
+  font-weight: bold;
+  }
+  
+/* icon (for jquery ui) */
+  
+.fc-button .fc-icon-wrap {
+  position: relative;
+  float: left;
+  top: 50%;
+  }
+  
+.fc-button .ui-icon {
+  position: relative;
+  float: left;
+  margin-top: -50%;
+  *margin-top: 0;
+  *top: -50%;
+  }
+  
+/*
+  button states
+  borrowed from twitter bootstrap (http://twitter.github.com/bootstrap/)
+*/
+
+.fc-state-default {
+  background-color: #fff;
+  border-color:#c3c6c9;
+  color:#657483;
+  box-shadow:inset 0 -2px 0 rgba(0,0,0,0.05);
+  }
+
+.fc-state-hover,
+.fc-state-down,
+.fc-state-active,
+.fc-state-disabled {
+  color: #333333;
+  background-color: #f7f8f9;
+  }
+
+.fc-state-hover {
+  color: #333333;
+  text-decoration: none;
+  background-position: 0 -15px;
+  -webkit-transition: background-position 0.1s linear;
+     -moz-transition: background-position 0.1s linear;
+       -o-transition: background-position 0.1s linear;
+          transition: background-position 0.1s linear;
+  }
+
+.fc-state-down,
+.fc-state-active {
+  background-color: #f7f8f9;
+  background-image: none;
+  outline: 0;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.15), 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+
+.fc-state-disabled {
+  cursor: default;
+  background-image: none;
+  opacity: 0.65;
+  filter: alpha(opacity=65);
+  box-shadow: none;
+  }
+
+  
+
+/* Global Event Styles
+------------------------------------------------------------------------*/
+   
+.fc-event {
+  background-color: #5191d1; /* default BACKGROUND color */
+  color: #fff;               /* default TEXT color */
+  font-size: .85em;
+  cursor: default;
+  padding: 4px 6px;
+  }
+
+a.fc-event {
+  text-decoration: none;
+  }
+  
+a.fc-event,
+.fc-event-draggable {
+  cursor: pointer;
+  }
+  
+.fc-rtl .fc-event {
+  text-align: right;
+  }
+
+.fc-event-inner {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  }
+  
+.fc-event-time,
+.fc-event-title {
+  padding: 0 1px;
+  }
+  
+.fc .ui-resizable-handle {
+  display: block;
+  position: absolute;
+  z-index: 99999;
+  overflow: hidden; /* hacky spaces (IE6/7) */
+  font-size: 300%;  /* */
+  line-height: 50%; /* */
+  }
+  
+  
+  
+/* Horizontal Events
+------------------------------------------------------------------------*/
+
+.fc-event-hori {
+  border-width: 1px 0;
+  margin-bottom: 1px;
+  }
+
+.fc-ltr .fc-event-hori.fc-event-start,
+.fc-rtl .fc-event-hori.fc-event-end {
+  border-left-width: 1px;
+  border-top-left-radius: 3px;
+  border-bottom-left-radius: 3px;
+  }
+
+.fc-ltr .fc-event-hori.fc-event-end,
+.fc-rtl .fc-event-hori.fc-event-start {
+  border-right-width: 1px;
+  border-top-right-radius: 3px;
+  border-bottom-right-radius: 3px;
+  }
+  
+/* resizable */
+  
+.fc-event-hori .ui-resizable-e {
+  top: 0           !important; /* importants override pre jquery ui 1.7 styles */
+  right: -3px      !important;
+  width: 7px       !important;
+  height: 100%     !important;
+  cursor: e-resize;
+  }
+  
+.fc-event-hori .ui-resizable-w {
+  top: 0           !important;
+  left: -3px       !important;
+  width: 7px       !important;
+  height: 100%     !important;
+  cursor: w-resize;
+  }
+  
+.fc-event-hori .ui-resizable-handle {
+  _padding-bottom: 14px; /* IE6 had 0 height */
+  }
+  
+  
+  
+/* Reusable Separate-border Table
+------------------------------------------------------------*/
+
+table.fc-border-separate {
+  border-collapse: separate;
+  }
+  
+.fc-border-separate th,
+.fc-border-separate td {
+  border-width: 1px 0 0 1px;
+  }
+  
+.fc-border-separate th.fc-last,
+.fc-border-separate td.fc-last {
+  border-right-width: 1px;
+  }
+  
+.fc-border-separate tr.fc-last th,
+.fc-border-separate tr.fc-last td {
+  border-bottom-width: 1px;
+  }
+  
+.fc-border-separate tbody tr.fc-first td,
+.fc-border-separate tbody tr.fc-first th {
+  border-top-width: 0;
+  }
+  
+  
+
+/* Month View, Basic Week View, Basic Day View
+------------------------------------------------------------------------*/
+
+.fc-grid th {
+  text-align: center;
+  }
+
+.fc .fc-week-number {
+  width: 22px;
+  text-align: center;
+  }
+
+.fc .fc-week-number div {
+  padding: 0 2px;
+  }
+  
+.fc-grid .fc-day-number {
+  float: right;
+  padding: 0 2px;
+  }
+  
+.fc-grid .fc-other-month .fc-day-number {
+  opacity: 0.3;
+  filter: alpha(opacity=30); /* for IE */
+  /* opacity with small font can sometimes look too faded
+     might want to set the 'color' property instead
+     making day-numbers bold also fixes the problem */
+  }
+  
+.fc-grid .fc-day-content {
+  clear: both;
+  padding: 2px 2px 1px; /* distance between events and day edges */
+  }
+  
+/* event styles */
+  
+.fc-grid .fc-event-time {
+  font-weight: bold;
+  }
+  
+/* right-to-left */
+  
+.fc-rtl .fc-grid .fc-day-number {
+  float: left;
+  }
+  
+.fc-rtl .fc-grid .fc-event-time {
+  float: right;
+  }
+  
+  
+
+/* Agenda Week View, Agenda Day View
+------------------------------------------------------------------------*/
+
+.fc-agenda table {
+  border-collapse: separate;
+  }
+  
+.fc-agenda-days th {
+  text-align: center;
+  }
+  
+.fc-agenda .fc-agenda-axis {
+  width: 50px;
+  padding: 0 4px;
+  vertical-align: middle;
+  text-align: right;
+  white-space: nowrap;
+  font-weight: normal;
+  }
+
+.fc-agenda .fc-week-number {
+  font-weight: bold;
+  }
+  
+.fc-agenda .fc-day-content {
+  padding: 2px 2px 1px;
+  }
+  
+/* make axis border take precedence */
+  
+.fc-agenda-days .fc-agenda-axis {
+  border-right-width: 1px;
+  }
+  
+.fc-agenda-days .fc-col0 {
+  border-left-width: 0;
+  }
+  
+/* all-day area */
+  
+.fc-agenda-allday th {
+  border-width: 0 1px;
+  }
+  
+.fc-agenda-allday .fc-day-content {
+  min-height: 34px; /* TODO: doesnt work well in quirksmode */
+  _height: 34px;
+  }
+  
+/* divider (between all-day and slots) */
+  
+.fc-agenda-divider-inner {
+  height: 2px;
+  overflow: hidden;
+  }
+  
+.fc-widget-header .fc-agenda-divider-inner {
+  background: #eee;
+  }
+  
+/* slot rows */
+  
+.fc-agenda-slots th {
+  border-width: 1px 1px 0;
+  }
+  
+.fc-agenda-slots td {
+  border-width: 1px 0 0;
+  background: none;
+  }
+  
+.fc-agenda-slots td div {
+  height: 20px;
+  }
+  
+.fc-agenda-slots tr.fc-slot0 th,
+.fc-agenda-slots tr.fc-slot0 td {
+  border-top-width: 0;
+  }
+
+.fc-agenda-slots tr.fc-minor th,
+.fc-agenda-slots tr.fc-minor td {
+  border-top-style: dotted;
+  }
+  
+.fc-agenda-slots tr.fc-minor th.ui-widget-header {
+  *border-top-style: solid; /* doesn't work with background in IE6/7 */
+  }
+  
+
+
+/* Vertical Events
+------------------------------------------------------------------------*/
+
+.fc-event-vert {
+  border-width: 0 1px;
+  }
+
+.fc-event-vert.fc-event-start {
+  border-top-width: 1px;
+  border-top-left-radius: 3px;
+  border-top-right-radius: 3px;
+  }
+
+.fc-event-vert.fc-event-end {
+  border-bottom-width: 1px;
+  border-bottom-left-radius: 3px;
+  border-bottom-right-radius: 3px;
+  }
+  
+.fc-event-vert .fc-event-time {
+  white-space: nowrap;
+  font-size: 10px;
+  }
+
+.fc-event-vert .fc-event-inner {
+  position: relative;
+  z-index: 2;
+  }
+  
+.fc-event-vert .fc-event-bg { /* makes the event lighter w/ a semi-transparent overlay  */
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  opacity: .25;
+  filter: alpha(opacity=25);
+  }
+  
+.fc .ui-draggable-dragging .fc-event-bg, /* TODO: something nicer like .fc-opacity */
+.fc-select-helper .fc-event-bg {
+  display: none\9; /* for IE6/7/8. nested opacity filters while dragging don't work */
+  }
+  
+/* resizable */
+  
+.fc-event-vert .ui-resizable-s {
+  bottom: 0        !important; /* importants override pre jquery ui 1.7 styles */
+  width: 100%      !important;
+  height: 8px      !important;
+  overflow: hidden !important;
+  line-height: 8px !important;
+  font-size: 11px  !important;
+  font-family: monospace;
+  text-align: center;
+  cursor: s-resize;
+  }
+  
+.fc-agenda .ui-resizable-resizing { /* TODO: better selector */
+  _overflow: hidden;
+}
+
+/*parsely*/
+.parsley-error-list{margin:0;padding: 0;list-style: none;margin-top: 6px;font-size: 12px}
+.parsley-error{border-color: #ff5f5f !important}
+
+/*datatable*/
+.dataTables_wrapper{position: relative;}
+.dataTables_processing{
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 250px;
+  margin-left: -125px;
+  margin-top: -15px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+  background-color: white;
+  z-index: 1;
+}
+.dataTables_wrapper .table{
+  border: 1px solid #e0e4e8;
+  border-width: 1px 0;
+}
+.dataTables_wrapper label{font-weight: normal;font-size: 12px;display: block;margin-bottom: 0}
+.dataTables_wrapper select, .dataTables_wrapper input{font-size:12px;min-height: 30px;padding: 5px 10px;border-radius: 3px;display: inline;border:1px solid #ccc;outline: 0}
+.dataTables_wrapper select{width: 75px;}
+.dataTables_wrapper input{width: 200px;}
+.dataTables_filter, .dataTables_paginate{float:right;}
+.dataTables_length, .dataTables_filter{padding: 15px;}
+.dataTables_info, .dataTables_paginate{padding: 15px;}
+.dataTables_wrapper .paginate_button, .dataTables_wrapper .paginate_active{cursor:pointer;outline:0;border:1px solid #dddddd;border-right-width:0;background: #fff;padding: 6px 10px}
+.dataTables_wrapper .paginate_active{background-color: #f5f5f5}
+.dataTables_wrapper .paginate_button_disabled{color: #ccc;background-color: #fafafa}
+.paginate_button.first{border-radius: 3px 0 0 3px;}
+.paginate_button.last{border-radius: 0 3px 3px 0;border-right-width:1px;}
+.dataTables_wrapper th{position: relative;cursor: pointer;outline: 0}
+.dataTables_wrapper th:after{font-family: FontAwesome; color: #666;position: absolute;right: 10px;font-weight: normal;}
+.dataTables_wrapper .sorting:after{content: "\f0dc";color: #ccc;}
+.dataTables_wrapper .sorting_asc:after{content: "\f0de";}
+.dataTables_wrapper .sorting_desc:after{content: "\f0dd";}
+
+
+/*Timeline*/
+.timeline{
+  display: table;
+  width: 100%;
+  border-spacing: 0;
+  table-layout: fixed;
+  position: relative;
+  border-collapse: collapse;
+}
+.timeline:before{
+  content: "";
+  width: 6px;
+  margin-left: -4px;
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 30px;
+  background-color: #ddd;
+  z-index: 0;
+}
+.timeline-item{display: table-row;}
+.timeline-caption{
+  display: table-cell;
+  vertical-align: top;
+  width: 50%;
+}
+.timeline-item:before, .timeline-item.alt:after{
+  content: "";
+  display: block;
+  width: 50%;
+}
+.timeline-item.alt:before{display: none}
+
+.timeline-date{position: absolute;width: 150px;left: -200px;top: 3px;text-align: right;}
+.timeline-icon{position: absolute;left: -41px;top: -2px;}
+.time-icon{width: 30px;height: 30px;display:inline-block !important;z-index: 10;border:2px solid #fff;border-radius: 20px;text-align: center;background-color: #898989}
+.time-icon:before{font-size: 16px;margin-top: 5px;color: #fff}
+.timeline-caption .panel{display: inline-block;position: relative;margin-left: 25px;position: relative;text-align: left;}
+.timeline-item.alt{text-align: right;}
+.timeline-item.alt .panel{margin-right: 25px;margin-left: 0}
+.timeline-item.alt .timeline-date{left: auto;right: -200px;text-align: left;}
+.timeline-item.alt .timeline-icon{left: auto;right: -41px;}
+.timeline-caption h5{margin:0}
+.timeline-caption h5 span{display: block;color: #999;margin-bottom: 4px;font-size: 12px}
+.active .timeline-caption h5 span{color: #fff}
+.timeline-item.active{display: table-caption;text-align: center;}
+.timeline-item.active:before{width: 1%}
+.active .timeline-caption{display: inline-block;width: auto;}
+.timeline-item.active .panel{margin-left: 0}
+.active .timeline-date, .active .timeline-icon{position: static;margin-bottom:10px;display: inline-block;width: auto;}
+.timeline-caption p{font-size: 12px;margin-bottom: 0;margin-top: 10px;}
+.timeline-footer{display: table-row;}
+.timeline-footer a{display: table-cell;text-align: right;}
+.timeline-footer .time-icon{margin-right: -15px;z-index: 5}

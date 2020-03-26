@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %} 主页 {% endblock %}
+
+{% block head %}
+
+
+{% endblock %}
+
+{% block nav %}
+<!-- nav -->
+
+	<nav id="nav" class="nav-primary visible-lg nav-vertical">
+		<ul class="nav" data-spy="affix" data-offset-top="50">
+			<li><a href="{{url_for('main_blue.my_account')}}"><i class="icon-user icon-xlarge"></i>账户</a></li>
+		  	<li><a href="{{url_for('main_blue.my_trade')}}"><i class="icon-money icon-xlarge"></i>交易</a></li>
+		  	<li><a href="{{url_for('main_blue.my_train_k')}}"><i class="icon-gamepad icon-xlarge"></i>训练</a></li>
+		  	<li><a href="{{url_for('main_blue.trade_review')}}"><i class="icon-dashboard icon-xlarge"></i>回看</a></li>
+	  	</ul>
+  	</nav>
+
+<!-- / nav -->
+{% endblock %}
+
+{% block content %}
+
+	<section id="content">
+
+		<section class="main padder">
+
+			<div class="clearfix">
+
+				<h4><i class="icon-edit"></i>欢迎</h4>
+
+			</div>
+
+		</section>
+
+	</section>
+
+{% endblock %}
+
+{% block script %}
+
+	<script type="text/javascript">
+		$SCRIPT_ROOT = {{ request.script_root|tojson|safe }};
+	</script>
+
+	<script type="text/javascript">
+		$(document).ready(function () {
+        	$('#bind_btn').attr('hidden', "hidden")
+    });
+	</script>
+
+{% endblock %}

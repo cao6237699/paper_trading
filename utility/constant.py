@@ -3,6 +3,7 @@ from enum import Enum
 
 class ConfigType(Enum):
     """app配置类型"""
+    DEVELOPMENT = "development"
     DEFAULT = "default"
     TRADING = "trading"
     TESTING = "testing"
