@@ -37,7 +37,7 @@ SETTINGS = {
     "POS_RECORD": "pt_pos_record",
 
     # tushare行情源参数(填写你自己的tushare token，可以前往https://tushare.pro/ 注册申请)
-    "TUSHARE_TOKEN": "3bd1ab27e003a6390baad5bd14292a0ab7d0c21983f8f6f176f51c6f",
+    "TUSHARE_TOKEN": "",
 
     # pytdx行情参数（可以去各家券商下载通达信交易软件找到相关的地址）
     "TDX_HOST": "210.51.39.201",
