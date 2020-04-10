@@ -1,7 +1,7 @@
 # Paper Trading
 
 
-![image](http://github.com/cao6237699/paper_trading/blob/master/data_flow.jpg)
+![image](https://github.com/cao6237699/paper_trading/blob/master/data_flow.jpg)
 
 ##更新预告
 本来就想写一个撮合交易的程序，没想到在实际使用过程中需求不断的产生，那就继续搞下去吧
