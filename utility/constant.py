@@ -22,6 +22,19 @@ class TradeType(Enum):
     T_PLUS0 = "t0"
 
 
+class LoadDataMode(Enum):
+    """数据加载模式"""
+    CREAT = "creat"             # 创建模式
+    BACKTEST = "backtest"       # 回测模式
+    TRADING = "trading"         # 交易模式
+
+
+class PersistanceMode(Enum):
+    """数据持久化模式"""
+    REALTIME = "realtime"       # 实时持久化
+    TIMING = "timing"           # 定时持久化, 暂未实现
+    MANUAL = "manual"           # 手动持久化
+
 class Direction(Enum):
     """
     Direction of order/trade/position.

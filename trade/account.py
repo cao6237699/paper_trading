@@ -1,873 +1,665 @@
 
+import copy
 import time
 import pandas as pd
-from datetime import datetime
 
-from paper_trading.utility.setting import get_token, SETTINGS
-from paper_trading.utility.constant import Status, OrderType, TradeType, PriceType
-from paper_trading.utility.model import Account, Position, Order, DBData
-from paper_trading.trade.report_builder import (
-    account_record_creat,
-    pos_record_creat,
-    pos_record_update_buy,
-    pos_record_update_sell,
-    pos_record_update_liq
+from paper_trading.event import Event
+from paper_trading.utility.event import *
+from paper_trading.utility.setting import SETTINGS
+from paper_trading.trade.db_model import (
+    query_position,
+    query_orders,
+    query_orders_today,
+    query_account_record,
+    query_pos_records,
+    query_pos_records_not_clear
 )
+from paper_trading.utility.constant import (
+    Status,
+    OrderType,
+    TradeType,
+    PriceType,
+    LoadDataMode
+)
+from paper_trading.utility.model import (
+    Account,
+    AccountRecord,
+    Position,
+    PosRecord,
+    Order
+)
+
 
 # 小数点保留位数
 P = SETTINGS["POINT"]
 
-"""账户操作"""
 
+class Trader:
+    """交易员"""
 
-def on_account_add(account_info: dict, db):
-    """创建账户"""
-    token = get_token()
-    
-    # 账户参数
-    param = {
-        'capital':SETTINGS['CAPITAL'],
-        'cost': SETTINGS['COST'],
-        'tax': SETTINGS['TAX'],
-        'slippoint': SETTINGS['SLIPPOINT'],
-        'info': ""
-    }
+    def __init__(self,
+                 event_engine,
+                 account_dict: dict,
+                 pst_active,
+                 load_data_mode,
+                 db):
+        """构造函数"""
+        self.event_engine = event_engine            # 事件引擎
+        self.__pst_active = pst_active              # 数据持久化开关
+        account = account_generate(account_dict)
+        self.token = account.account_id
+        self.account = account
 
-    # 更新账户参数
-    param.update(account_info)
+        self.pos = dict()                           # 持仓数据
+        self.orders = dict()                        # 订单数据
+        self.account_record = pd.DataFrame()        # 账户记录
+        self.pos_record = pd.DataFrame()            # 持仓记录
 
-    try:
-        account = Account(
-            account_id=token,
-            assets=round(float(param['capital']), P),
-            available=round(float(param['capital']), P),
-            market_value=round(0.0, P),
-            capital=round(float(param['capital']), P),
-            cost=float(param['cost']),
-            tax=float(param['tax']),
-            slippoint=float(param['slippoint']),
-            account_info=param['info']
-        )
+        # 加载数据
+        self.__load_data(load_data_mode, db)
 
-        raw_data = {}
-        raw_data['flt'] = {'account_id': token}
-        raw_data['data'] = account
-        db_data = DBData(
-            db_name=SETTINGS['ACCOUNT_DB'],
-            db_cl=token,
-            raw_data=raw_data
-        )
-        if db.on_insert(db_data):
-            return token
-    except BaseException:
-        return False
-
-
-def on_account_exist(token: str, db):
-    """账户是否存在"""
-    account = query_account_one(token, db)
-
-    if account:
-        return True
-    else:
-        return False
-
-
-def on_account_delete(token: str, db):
-    """账户删除"""
-    try:
-        account = DBData(
-            db_name=SETTINGS['ACCOUNT_DB'],
-            db_cl=token,
-            raw_data={}
-        )
-        db.on_collection_delete(account)
-
-        position = DBData(
-            db_name=SETTINGS['POSITION_DB'],
-            db_cl=token,
-            raw_data={}
-        )
-        db.on_collection_delete(position)
-
-        order = DBData(
-            db_name=SETTINGS['TRADE_DB'],
-            db_cl=token,
-            raw_data={}
-        )
-        db.on_collection_delete(order)
-
-        account_record = DBData(
-            db_name=SETTINGS['ACCOUNT_RECORD'],
-            db_cl=token,
-            raw_data={}
-        )
-        db.on_collection_delete(account_record)
-
-        pos_record = DBData(
-            db_name=SETTINGS['POS_RECORD'],
-            db_cl=token,
-            raw_data={}
-        )
-        db.on_collection_delete(pos_record)
-
-        return True
-    except BaseException:
-        return False
-
-
-def on_account_update(order: Order, db):
-    """订单成交后账户操作"""
-    account = query_account_one(order.account_id, db)
-    pos_val = query_position_value(order.account_id, db)
-
-    if order.order_type == OrderType.BUY.value:
-        on_account_buy(account, order, pos_val, db)
-    else:
-        on_account_sell(account, order, pos_val, db)
-
-
-def on_account_buy(account: dict, order: Order, pos_val: float, db):
-    """买入成交后账户操作"""
-    frozen_all = account["assets"] - \
-        account["available"] - account["market_value"]
-    frozen = (order.volume * order.order_price) * (1 + account['cost'])
-    pay = (order.traded * order.trade_price) * (1 + account['cost'])
-
-    available = account["available"] + frozen - pay
-    frozen_all = frozen_all - frozen
-    assets = available + pos_val + frozen_all
-    raw_data = {}
-    raw_data["flt"] = {"account_id": account["account_id"]}
-    raw_data["set"] = {'$set': {'available': round(available, P),
-                                'assets': round(assets, P),
-                                'market_value': round(pos_val, P)}}
-    db_data = DBData(
-        db_name=SETTINGS['ACCOUNT_DB'],
-        db_cl=account["account_id"],
-        raw_data=raw_data
-    )
-    return db.on_update(db_data)
-
-
-def on_account_sell(account: dict, order: Order, pos_val: float, db):
-    """卖出成交后账户操作"""
-    frozen = account["assets"] - account["available"] - account["market_value"]
-    order_val = order.traded * order.trade_price
-    cost = order_val * account['cost']
-    tax = order_val * account['tax']
-    available = account["available"] + order_val - cost - tax
-    assets = available + pos_val + frozen
-
-    raw_data = {}
-    raw_data["flt"] = {"account_id": account["account_id"]}
-    raw_data["set"] = {'$set': {'available': round(available, P),
-                                'assets': round(assets, P),
-                                'market_value': round(pos_val, P)}}
-    db_data = DBData(
-        db_name=SETTINGS['ACCOUNT_DB'],
-        db_cl=account["account_id"],
-        raw_data=raw_data
-    )
-    return db.on_update(db_data)
-
-
-def on_account_liquidation(db, token: str):
-    """账户清算"""
-    account = query_account_one(token, db)
-    pos_val = query_position_value(token, db)
-
-    # 解除冻结
-    available = account["assets"] - account["market_value"]
-    assets = available + pos_val
-
-    raw_data = {}
-    raw_data["flt"] = {"account_id": token}
-    raw_data["set"] = {'$set': {'available': round(available, P),
-                                'assets': round(assets, P),
-                                'market_value': round(pos_val, P)}}
-    db_data = DBData(
-        db_name=SETTINGS['ACCOUNT_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    return db.on_update(db_data)
-
-
-def query_account_list(db):
-    """查询账户列表"""
-    db_data = DBData(
-        db_name=SETTINGS['ACCOUNT_DB'],
-        db_cl="",
-        raw_data={}
-    )
-    return db.on_collections_query(db_data)
-
-
-def query_account_one(token: str, db):
-    """查询账户信息"""
-    if token:
-        raw_data = {}
-        raw_data['flt'] = {"account_id": token}
-        db_data = DBData(
-            db_name=SETTINGS['ACCOUNT_DB'],
-            db_cl=token,
-            raw_data=raw_data
-        )
-        account = db.on_query_one(db_data)
-        if account:
-            del account["_id"]
-            return account
+    def __load_data(self, load_data_mode, db):
+        """加载数据"""
+        # 新建模式：不用加载数据
+        if load_data_mode == LoadDataMode.CREAT:
+            pass
+        # 回测模式：加载所有数据
+        elif load_data_mode == LoadDataMode.BACKTEST:
+            self.__load_pos(db)
+            self.__load_orders(db)
+            self.__load_account_records(db)
+            self.__load_pos_records(db)
+        # 交易模式：加载当前持仓，当日的订单及未清仓的持仓记录
+        elif load_data_mode == LoadDataMode.TRADING:
+            self.__load_pos(db)
+            self.__load_today_orders(db)
+            self.__load_pos_records_not_clear(db)
         else:
-            return False
+            raise ValueError("数据加载模式错误")
 
+    def __load_pos(self, db):
+        """加载持仓"""
+        data = query_position(self.token, db)
+        if isinstance(data, list):
+            for d in data:
+                pos = pos_generate(d)
+                self.pos[pos.pt_symbol] = pos
 
-def query_account_record(token, db, start: str = None, end: str = None):
-    """查询账户记录"""
-    raw_data = {}
-    raw_data["flt"] = {'check_date': {'$gte': start, '$lte': end}}
-    db_data = DBData(
-        db_name=SETTINGS['ACCOUNT_RECORD'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    result = list(db.on_select(db_data))
-    account_record = []
-    if result:
-        for i in result:
-            del i["_id"]
-            account_record.append(i)
-        return account_record
-    else:
-        return False
+    def __load_orders(self, db):
+        """加载所有订单数据"""
+        data = query_orders(self.token, db)
+        if isinstance(data, list):
+            for d in data:
+                order = order_generate(d)
+                self.orders[order.order_id] = order
 
+    def __load_today_orders(self, db):
+        """加载当日订单"""
+        data = query_orders_today(self.token, db)
+        if isinstance(data, list):
+            for d in data:
+                order = order_generate(d)
+                self.orders[order.order_id] = order
 
-"""订单操作"""
+    def __load_account_records(self, db):
+        """加载账户记录"""
+        account_record = query_account_record(self.token, db)
+        if account_record:
+            self.account_record = pd.DataFrame(account_record, index=[i for i in range(len(account_record))])
 
+    def __load_pos_records(self, db):
+        """加载所有持仓记录"""
+        pos_record = query_pos_records(self.token, db)
+        if pos_record:
+             self.pos_record = pd.DataFrame(pos_record, index=[i for i in range(len(pos_record))])
 
-def on_orders_arrived(order: Order, db):
-    """订单到达"""
-    # 接收订单前的验证
-    if SETTINGS['VERIFICATION']:
-        result, msg = on_front_verification(order, db)
-        if not result:
-            return result, msg
+    def __load_pos_records_not_clear(self, db):
+        """加载未清仓的持仓记录数据"""
+        pos_record = query_pos_records_not_clear(self.token, db)
+        if pos_record:
+             self.pos_record = pd.DataFrame(pos_record, index=[i for i in range(len(pos_record))])
 
-    return on_orders_insert(order, db)
+    def __make_event(self, event_name, data):
+        """制造事件"""
+        if self.__pst_active:
+            new_data = copy.deepcopy(data)
+            event = Event(event_name, new_data)
+            self.event_engine.put(event)
 
+    def on_orders_arrived(self, order: Order):
+        """订单到达"""
+        # 接收订单前的验证
+        if SETTINGS['VERIFICATION']:
+            result, msg = self.__on_front_verification(order)
+            if not result:
+                return result, msg
 
-def on_orders_insert(order: Order, db):
-    """订单插入"""
-    # 生成订单ID
-    order.order_id = str(time.time())
-    token = order.account_id
+        # 生成订单ID
+        order.order_id = str(time.time())
 
-    # 补充订单信息
-    if order.order_price == 0:
-        order.price_type = PriceType.MARKET.value
-    else:
-        order.price_type = PriceType.LIMIT.value
+        # 补充订单信息
+        if order.order_price == 0:
+            order.price_type = PriceType.MARKET.value
+        else:
+            order.price_type = PriceType.LIMIT.value
 
-    raw_data = {}
-    raw_data['flt'] = {'order_id': order.order_id}
-    raw_data['data'] = order
-    db_data = DBData(
-        db_name=SETTINGS['TRADE_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
+        self.orders[order.order_id] = order
 
-    if db.on_replace_one(db_data):
+        # 推送订单保存事件
+        self.__make_event(EVENT_ORDER_INSERT, order)
+
         return True, order
-    else:
-        return False, "交易表新增订单失败"
 
-
-def on_orders_exist(token: str, order_id: str, db):
-    """查询订单是否存在"""
-    raw_data = {}
-    raw_data["flt"] = {'order_id': order_id}
-    db_data = DBData(
-        db_name=SETTINGS['TRADE_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    order = db.on_select(db_data)
-    if order.count():
-        return True
-    else:
-        return False
-
-
-def on_order_update(order: Order, db):
-    """订单状态更新"""
-    result, order_old = query_order_one(order.account_id, order.order_id, db)
-
-    raw_data = {}
-    raw_data["flt"] = {'order_id': order.order_id}
-    raw_data["set"] = {'$set': {'status': order.status,
-                                'trade_type': order.trade_type,
-                                'trade_price': order.trade_price,
-                                'traded': (order.traded + order_old["traded"]),
-                                'error_msg': order.error_msg}}
-    db_data = DBData(
-        db_name=SETTINGS['TRADE_DB'],
-        db_cl=order.account_id,
-        raw_data=raw_data
-    )
-    return db.on_update(db_data)
-
-
-def on_order_deal(order: Order, db):
-    """订单成交处理"""
-    # 持仓处理
-    on_position_update(order, db)
-
-    # 账户处理
-    on_account_update(order, db)
-
-    if order.volume == order.traded:
-        order.status = Status.ALLTRADED.value
-    else:
-        order.status = Status.PARTTRADED.value
-
-    on_order_update(order, db)
-
-
-def query_order_status(token: str, order_id: str, db):
-    """查询订单情况"""
-    raw_data = {}
-    raw_data["flt"] = {'order_id': order_id}
-    db_data = DBData(
-        db_name=SETTINGS['TRADE_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    order = db.on_query_one(db_data)
-
-    if order:
-        return True, order["status"]
-    else:
-        return False, "无此订单"
-
-
-def query_orders(token: str, db):
-    """查询交割单"""
-    raw_data = {}
-    raw_data["flt"] = {}
-    db_data = DBData(
-        db_name=SETTINGS['TRADE_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    result = db.on_select(db_data)
-    orders = []
-
-    if isinstance(result, bool):
-        return False
-    else:
-        result = list(result)
-        if result:
-            for o in result:
-                del o["_id"]
-                orders.append(o)
-            return orders
+    def on_order_deal(self, order: Order):
+        """订单成交处理"""
+        # 买入处理
+        if order.order_type == OrderType.BUY.value:
+            pos_val_diff = self.__on_position_append(order)
+            self.__on_account_buy(order, pos_val_diff)
+        # 卖出处理
         else:
-            return "无委托记录"
+            pos_val_diff = self.__on_position_reduce(order)
+            self.__on_account_sell(order, pos_val_diff)
 
-
-def query_order_one(token: str, order_id: str, db):
-    """查询一条订单数据"""
-    raw_data = {}
-    raw_data["flt"] = {'order_id': order_id}
-    db_data = DBData(
-        db_name=SETTINGS['TRADE_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    order = db.on_query_one(db_data)
-
-    if order:
-        return True, order
-    else:
-        return False, ""
-
-
-def query_orders_today(token: str, db):
-    """查询今天的所有订单"""
-    today = datetime.now().strftime("%Y%m%d")
-    raw_data = {}
-    raw_data["flt"] = {"order_date": today}
-    db_data = DBData(
-        db_name=SETTINGS['TRADE_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    result = db.on_select(db_data)
-    orders = []
-
-    if isinstance(result, bool):
-        return False
-    else:
-        result = list(result)
-        if result:
-            for o in result:
-                del o["_id"]
-                orders.append(o)
-            return orders
+        if order.volume == order.traded:
+            order.status = Status.ALLTRADED.value
         else:
-            return "无委托记录"
+            order.status = Status.PARTTRADED.value
 
+        # 订单更新
+        new_order = copy.copy(order)
+        self.orders[order.order_id] = new_order
 
-def query_orders_by_symbol(token: str, symbol: str, db):
-    """查询某symbol的所有订单"""
-    raw_data = {}
-    raw_data["flt"] = {'pt_symbol': symbol}
-    db_data = DBData(
-        db_name=SETTINGS['TRADE_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    result = db.on_select(db_data)
-    orders = []
+        # 订单更新事件
+        self.__make_event(EVENT_ORDER_UPDATE, order)
 
-    if isinstance(result, bool):
-        return False
-    else:
-        result = list(result)
-        if result:
-            for o in result:
-                del o["_id"]
-                orders.append(o)
-            return orders
+    def on_order_cancel(self, order: Order):
+        """取消订单"""
+        order.status = Status.CANCELLED.value
+        self.on_order_refuse(order)
+
+    def on_order_refuse(self, order: Order):
+        """拒绝订单"""
+        # 更新订单
+        self.orders[order.order_id].status = order.status
+        self.orders[order.order_id].error_msg = order.error_msg
+
+        # 推送订单状态修改事件
+        self.__make_event(EVENT_ORDER_STATUS_UPDATE, {
+            'token': order.account_id,
+            'id': order.order_id,
+            'status': order.status,
+            'msg': order.error_msg
+        })
+
+        if order.order_type == OrderType.BUY.value:
+            return self.__on_buy_cancel(order)
         else:
-            return "无此代码的交易记录"
+            return self.__on_sell_cancel(order)
 
-"""持仓操作"""
+    def on_order_status_update(self, order: Order):
+        """更新订单状态信息"""
+        self.orders[order.order_id].status = order.status
 
+        # 推送订单状态修改事件
+        self.__make_event(EVENT_ORDER_STATUS_UPDATE, {
+            'token': order.account_id,
+            'id': order.order_id,
+            'status': order.status,
+            'msg': order.error_msg
+        })
 
-def query_position(token: str, db):
-    """查询所有持仓信息"""
-    raw_data = {}
-    raw_data["flt"] = {}
-    db_data = DBData(
-        db_name=SETTINGS['POSITION_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    result = list(db.on_select(db_data))
-    pos = []
-    if isinstance(result, bool):
-        return False
-    else:
-        result = list(result)
-        if result:
-            for p in result:
-                del p["_id"]
-                pos.append(p)
-            return pos
-        else:
-            return "无持仓"
+    def __on_account_buy(self, order: Order, pos_val_diff):
+        """买入成交后账户操作"""
+        old_pos_val = self.account.market_value
+        market_value = round((old_pos_val + pos_val_diff), P)
+        frozen_all = self.account.assets - \
+                     self.account.available - old_pos_val
+        frozen = (order.volume * order.order_price) * (1 + self.account.cost)
+        pay = (order.traded * order.trade_price) * (1 + self.account.cost)
 
+        available = round((self.account.available + frozen - pay), P)
+        frozen_all = frozen_all - frozen
+        assets = round((available + market_value + frozen_all), P)
 
-def query_position_one(token: str, symbol: str, db):
-    """查询某一只证券的持仓"""
-    raw_data = {}
-    raw_data["flt"] = {'pt_symbol': symbol}
-    db_data = DBData(
-        db_name=SETTINGS['POSITION_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    pos = db.on_query_one(db_data)
-    if pos:
-        return True, pos
-    else:
-        return False, ""
+        # 更新账户信息
+        self.account.market_value = market_value
+        self.account.available = available
+        self.account.assets = assets
 
+        # 推送账户更新事件
+        self.__make_event(EVENT_ACCOUNT_UPDATE, {
+            'token': self.token,
+            'avl': available,
+            'market_value': market_value,
+            'assets': assets
+        })
 
-def query_position_value(token: str, db):
-    """查询账户市值"""
-    pos = query_position(token, db)
+    def __on_account_sell(self, order: Order, pos_val_diff):
+        """卖出成交后账户操作"""
+        old_pos_val = self.account.market_value
+        market_value = round((old_pos_val + pos_val_diff), P)
+        frozen = self.account.assets - self.account.available - old_pos_val
+        order_val = order.traded * order.trade_price
+        cost = order_val * self.account.cost
+        tax = order_val * self.account.tax
+        available = round((self.account.available + order_val - cost - tax), P)
+        assets = round((available + market_value + frozen), P)
 
-    if pos != "无持仓":
-        df = pd.DataFrame(list(pos))
-        df['value'] = (df['volume'] * df['now_price'])
-        return float(df['value'].sum())
-    else:
-        return 0
+        # 更新账户信息
+        self.account.market_value = market_value
+        self.account.available = available
+        self.account.assets = assets
 
+        # 推送账户更新事件
+        self.__make_event(EVENT_ACCOUNT_UPDATE, {
+            'token': self.token,
+            'avl': available,
+            'market_value': market_value,
+            'assets': assets
+        })
 
-def query_position_record(token, db, start: str = None, end: str = None):
-    """查询账户记录"""
-    raw_data = {}
-    raw_data["flt"] = {}
+    def __on_account_assets_update(self, value: float):
+        """账户资产更新"""
+        assets = self.account.assets + value
+        market_value = self.account.market_value + value
+        # 更新账户市值
+        self.account.assets = assets
+        self.account.market_value = market_value
 
-    if start and end == None:
-        raw_data["flt"] = {'first_buy_date': {'$gte': start}}
-    elif start == None and end:
-        raw_data["flt"] = {'first_buy_date': {'$lte': end}}
-    elif start and end:
-        raw_data["flt"] = {'first_buy_date': {'$gte': start, '$lte': end}}
+        # 推送账户市值变更事件
+        self.__make_event(EVENT_ACCOUNT_ASSETS_UPDATE, {
+            'token': self.token,
+            'market_value': market_value,
+            'assets': assets
+        })
 
-    db_data = DBData(
-        db_name=SETTINGS['POS_RECORD'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    result = list(db.on_select(db_data))
-    pos_record = []
-    if result:
-        for i in result:
-            del i["_id"]
-            pos_record.append(i)
-        return pos_record
-    else:
-        return False
-
-
-def on_position_insert(order: Order, cost: float, db):
-    """持仓增加"""
-    profit = cost * -1
-    available = order.traded
-    if order.trade_type == TradeType.T_PLUS1.value:
-        available = 0
-
-    pos = Position(
-        code=order.code,
-        exchange=order.exchange,
-        account_id=order.account_id,
-        buy_date=order.order_date,
-        volume=order.traded,
-        available=available,
-        buy_price=order.trade_price,
-        now_price=order.trade_price,
-        profit=profit
-    )
-
-    raw_data = {}
-    raw_data['flt'] = {'pt_symbol': pos.pt_symbol}
-    raw_data['data'] = pos
-    db_data = DBData(
-        db_name=SETTINGS['POSITION_DB'],
-        db_cl=order.account_id,
-        raw_data=raw_data
-    )
-    if db.on_insert(db_data):
-        # 保存持仓记录
-        return pos_record_creat(order.account_id, db, pos)
-
-
-def on_position_update(order: Order, db):
-    """订单成交后持仓操作"""
-    if order.order_type == OrderType.BUY.value:
-        on_position_append(order, db)
-    else:
-        on_position_reduce(order, db)
-
-
-def on_position_append(order: Order, db):
-    """持仓增长"""
-    token = order.account_id
-    symbol = order.pt_symbol
-
-    # 查询账户信息
-    account = query_account_one(token, db)
-
-    result, pos_o = query_position_one(token, symbol, db)
-    cost = order.volume * order.trade_price * account['cost']
-    if result:
-        volume = pos_o['volume'] + order.traded
-        now_price = order.trade_price
-        profit = (order.trade_price -
-                  pos_o['now_price']) * pos_o['volume'] + pos_o['profit'] - cost
-        available = pos_o['available'] + order.traded
-
+    def __on_position_insert(self, order: Order, cost: float):
+        """持仓增加"""
+        profit = round((cost * -1), P)
+        available = order.traded
         if order.trade_type == TradeType.T_PLUS1.value:
-            available = pos_o['available']
+            available = 0
 
-        buy_price = round(((pos_o['volume'] *
-                            pos_o['now_price']) +
-                           (order.traded *
-                            order.trade_price)) /
-                          volume, 2)
-
-        raw_data = {}
-        raw_data["flt"] = {'pt_symbol': symbol}
-        raw_data["set"] = {'$set': {'volume': round(volume, P),
-                                    'available': round(available, P),
-                                    'buy_price': round(buy_price, P),
-                                    'now_price': round(now_price, P),
-                                    'profit': round(profit, P)}}
-        db_data = DBData(
-            db_name=SETTINGS['POSITION_DB'],
-            db_cl=token,
-            raw_data=raw_data
+        pos = Position(
+            code=order.code,
+            exchange=order.exchange,
+            account_id=order.account_id,
+            buy_date=order.order_date,
+            volume=order.traded,
+            available=available,
+            buy_price=order.trade_price,
+            now_price=order.trade_price,
+            profit=profit
         )
-        if db.on_update(db_data):
-            # 更新持仓记录
+
+        self.pos[order.pt_symbol] = copy.copy(pos)
+        pos_val = pos.volume * pos.now_price
+
+        # 推送持仓新建事件
+        self.__make_event(EVENT_POS_INSERT, pos)
+
+        # 创建持仓记录
+        pos_record = PosRecord(
+            code=pos.code,
+            exchange=pos.exchange,
+            account_id=pos.account_id,
+            first_buy_date=pos.buy_date,
+            last_sell_date="",
+            max_vol=pos.volume,
+            buy_price_mean=pos.buy_price,
+            sell_price_mean=0.0,
+            profit=pos.profit
+        )
+        df = pd.DataFrame(pos_record.__dict__, index=[len(self.pos_record)])
+        self.pos_record = self.pos_record.append(df)
+
+        # 推送持仓记录新建事件
+        self.__make_event(EVENT_POS_RECORD_INSERT, pos_record)
+
+        return pos_val
+
+    def __on_position_append(self, order: Order):
+        """持仓增长"""
+        cost = order.volume * order.trade_price * self.account.cost
+
+        # 有标的持仓
+        old_pos = self.pos.get(order.pt_symbol, None)
+        if old_pos:
+            old_pos_val = old_pos.volume * old_pos.now_price
+            volume = old_pos.volume + order.traded
+            now_price = order.trade_price
+            profit = round(((order.trade_price -
+                      old_pos.now_price) * old_pos.volume + old_pos.profit - cost), P)
+            available = old_pos.available + order.traded
+
+            if order.trade_type == TradeType.T_PLUS1.value:
+                available = old_pos.available
+
+            buy_price = round((((old_pos.volume * old_pos.buy_price) +
+                               (order.traded * order.trade_price)) / volume), P)
+
+            # 更新持仓信息
+            new_pos = copy.copy(old_pos)
+            new_pos.volume = volume
+            new_pos.now_price = now_price
+            new_pos.buy_price = buy_price
+            new_pos.available = available
+            new_pos.profit = profit
+            self.pos[order.pt_symbol] = new_pos
+            new_pos_val = volume * now_price
+            pos_val_diff = new_pos_val - old_pos_val
+
+            # 推送持仓更新事件
+            self.__make_event(EVENT_POS_UPDATE, new_pos)
+
+            # 持仓记录更新
+            index = self.pos_record.loc[(self.pos_record['pt_symbol']==order.pt_symbol) & (self.pos_record['is_clear']==0)].index.tolist()
+            if index:
+                i = index[0]
+                self.pos_record.loc[i, 'max_vol'] = volume
+                self.pos_record.loc[i, 'buy_price_mean'] = buy_price
+                self.pos_record.loc[i, 'profit'] = profit
+
+                # 推送持仓增加记录事件
+                pos_info = {
+                    'token': order.account_id,
+                    'symbol': order.pt_symbol,
+                    "max_vol": volume,
+                    "buy_price_mean": buy_price,
+                    "profit": profit
+                }
+                self.__make_event(EVENT_POS_RECORD_BUY, pos_info)
+
+            return pos_val_diff
+        else:
+            pos_val_diff = self.__on_position_insert(order, cost)
+            return pos_val_diff
+
+    def __on_position_reduce(self, order: Order):
+        """持仓减少"""
+        old_pos = self.pos.get(order.pt_symbol)
+
+        old_pos_val = old_pos.volume * old_pos.now_price
+
+        volume = old_pos.volume - order.volume
+        now_price = order.trade_price
+        cost = order.volume * order.trade_price * self.account.cost
+        tax = order.volume * order.trade_price * self.account.tax
+        profit = round(((order.trade_price - old_pos.now_price) *
+                 old_pos.volume + old_pos.profit - cost - tax), P)
+
+        # 更新
+        new_pos = copy.copy(old_pos)
+        new_pos.volume = volume
+        new_pos.now_price = now_price
+        new_pos.profit = profit
+        self.pos[order.pt_symbol] = new_pos
+        new_pos_val = volume * now_price
+        pos_val_diff = new_pos_val - old_pos_val
+
+        # 推送持仓更新事件
+        self.__make_event(EVENT_POS_UPDATE, new_pos)
+
+        # 持仓记录更新
+        index = self.pos_record.loc[(self.pos_record['pt_symbol'] == order.pt_symbol) & (self.pos_record['is_clear'] == 0)].index.tolist()
+        if index:
+            i = index[0]
+            max_vol = int(self.pos_record.loc[i, 'max_vol'])
+            sell_price_mean = float(self.pos_record.loc[i, 'sell_price_mean'])
+            new_sell_price_mean = sell_price_mean + ((order.volume / max_vol) * now_price)
+            self.pos_record.loc[i, 'sell_price_mean'] = new_sell_price_mean
+            self.pos_record.loc[i, 'last_sell_date'] = order.order_date
+            self.pos_record.loc[i, 'profit'] = profit
+
+            # 推送持仓记录更新
             pos_info = {
-                "vol": round(order.traded, P),
-                "buy_price": round(buy_price, P),
-                "profit": round(profit, P)
+                'token': order.account_id,
+                'symbol': order.pt_symbol,
+                "sell_price_mean": new_sell_price_mean,
+                "profit": profit,
+                "date": order.order_date
             }
-            return pos_record_update_buy(token, db, symbol, pos_info)
+            self.__make_event(EVENT_POS_RECORD_SELL, pos_info)
 
-    else:
-        on_position_insert(order, cost, db)
+        return pos_val_diff
 
+    def on_position_update_price(self, pos, price: float):
+        """更新持仓价格"""
+        volume = pos.volume
+        if volume:
+            old_value = pos.volume * pos.now_price
+            new_value = pos.volume * price
+            value_diff = new_value - old_value
 
-def on_position_reduce(order: Order, db):
-    """持仓减少"""
-    token = order.account_id
-    symbol = order.pt_symbol
+            profit = round((price - pos.now_price) * \
+                     volume + pos.profit, P)
 
-    # 查询账户信息
-    account = query_account_one(token, db)
+            # 更新持仓价格
+            pos.now_price = price
+            pos.profit = profit
+            self.pos[pos.pt_symbol] = pos
 
-    result, pos_o = query_position_one(token, symbol, db)
-    volume = pos_o['volume'] - order.volume
-    now_price = order.trade_price
-    cost = order.volume * order.trade_price * account['cost']
-    tax = order.volume * order.trade_price * account['tax']
-    profit = (order.trade_price - pos_o['now_price']) * \
-        pos_o['volume'] + pos_o['profit'] - cost - tax
+            # 推送持仓价格更新事件
+            self.__make_event(EVENT_POS_PRICE_UPDATE, {
+                "token": self.token,
+                "symbol": pos.pt_symbol,
+                "price": price,
+                "profit": profit,
+            })
 
-    raw_data = {}
-    raw_data["flt"] = {'pt_symbol': symbol}
-    raw_data["set"] = {'$set': {'volume': round(volume, P),
-                                'now_price': round(now_price, P),
-                                'profit': round(profit, P)}}
-    db_data = DBData(
-        db_name=SETTINGS['POSITION_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    if db.on_update(db_data):
-        # 更新持仓记录
-        pos_info = {
-            "sell_price": round(now_price, P),
-            "vol": round(order.volume, P),
-            "profit": round(profit, P),
-            "date": order.order_date
-        }
-        return pos_record_update_sell(token, db, symbol, pos_info)
+            # 更新账户信息
+            self.__on_account_assets_update(value_diff)
 
+    def __on_position_frozen_cancel(self, symbol):
+        """持仓解除冻结"""
+        volume = self.pos[symbol].volume
+        if volume:
+            # 更新
+            self.pos[symbol].available = volume
 
-def on_position_liquidation(db, token, price_dict: dict = None):
-    """持仓清算"""
-    pos_list = query_position(token, db)
-    if isinstance(pos_list, list):
-        for pos in pos_list:
-            if price_dict:
-                if pos["pt_symbol"] in price_dict.keys():
-                    # 更新最新价格
-                    new_price = price_dict.get(pos["pt_symbol"])
-                    on_position_update_price(token, pos, new_price, db)
-            # 解除账户冻结
-            on_position_frozen_cancel(token, pos, db)
+            # 推送股份解冻事件
+            self.__make_event(EVENT_POS_AVL_UPDATE, {
+                "token": self.token,
+                "symbol": symbol,
+                "avl": volume
+            })
+        else:
+            # 持仓为空的删除持仓信息
+            del self.pos[symbol]
 
+            # 推送持仓清空事件
+            self.__make_event(EVENT_POS_DELETE, {
+                'token': self.token,
+                'symbol': symbol
+            })
 
-def on_position_update_price(token: str, pos: dict, price: float, db):
-    """更新持仓价格并解除冻结"""
-    volume = pos['volume']
-    if volume:
-        profit = (price - pos['now_price']) * \
-            pos['volume'] + pos['profit']
+            # 持仓记录更新
+            index = self.pos_record.loc[(self.pos_record['pt_symbol'] == symbol) & (self.pos_record['is_clear'] == 0)].index.tolist()
+            if index:
+                self.pos_record.loc[index[0], 'is_clear'] = 1
 
-        raw_data = {}
-        raw_data["flt"] = {'pt_symbol': pos['pt_symbol']}
-        raw_data["set"] = {'$set': {'now_price': round(price, P),
-                                    'profit': round(profit, P),
-                                    'available': volume}}
-        db_data = DBData(
-            db_name=SETTINGS['POSITION_DB'],
-            db_cl=token,
-            raw_data=raw_data
-        )
-        db.on_update(db_data)
+            # 推送持仓增加记录事件
+            pos_info = {
+                'token': self.token,
+                'symbol': symbol
+            }
+            self.__make_event(EVENT_POS_RECORD_CLEAR, pos_info)
 
 
-def on_position_frozen_cancel(token: str, pos: dict, db):
-    """持仓解除冻结"""
-    volume = pos['volume']
-    if volume:
-        raw_data = {}
-        raw_data["flt"] = {'pt_symbol': pos["pt_symbol"]}
-        raw_data["set"] = {'$set': {'available': pos["volume"]}}
-        db_data = DBData(
-            db_name=SETTINGS['POSITION_DB'],
-            db_cl=token,
-            raw_data=raw_data
-        )
-        db.on_update(db_data)
-    else:
-        # 持仓为空的删除持仓信息
-        raw_data = {}
-        raw_data["flt"] = {'pt_symbol': pos["pt_symbol"]}
-        db_data = DBData(
-            db_name=SETTINGS['POSITION_DB'],
-            db_cl=token,
-            raw_data=raw_data
-        )
-        db.on_delete(db_data)
+    """验证"""
 
-        # 持仓记录清算
-        pos_record_update_liq(token , db, pos['pt_symbol'])
+    def __on_front_verification(self, order: Order):
+        """订单前置验证"""
+        # 对订单的准确性验证
+        # TODO
 
+        if order.order_type == OrderType.BUY.value:
+            return self.__account_verification(order)
+        else:
+            return self.__position_verification(order)
 
-"""验证操作"""
+    def __account_verification(self, order: Order):
+        """订单账户资金验证"""
+        # 查询账户信息
+        money_need = order.volume * order.order_price * (1 + self.account.cost)
 
+        if self.account.available >= money_need:
+            # 资金冻结
+            avl_diff = self.account.available - money_need
+            self.account.available = avl_diff
 
-def on_front_verification(order: Order, db):
-    """订单前置验证"""
-    # 验证市场是否开启
-    if not SETTINGS["MARKET_NAME"]:
-        return False, "交易市场关闭"
+            # 推送账户资金冻结事件
+            self.__make_event(EVENT_ACCOUNT_AVL_UPDATE, {
+                'token':self.token,
+                'avl': avl_diff
+            })
 
-    # 验证账户是否存在
-    if not on_account_exist(order.account_id, db):
-        return False, "账户不存在"
-
-    # 对订单的准确性验证
-    # TODO
-
-    if order.order_type == OrderType.BUY.value:
-        return account_verification(order, db)
-    else:
-        return position_verification(order, db)
-
-
-def account_verification(order: Order, db):
-    """订单账户资金验证"""
-    token = order.account_id
-
-    # 查询账户信息
-    account = query_account_one(token, db)
-
-    money_need = order.volume * order.order_price * (1 + account['cost'])
-
-    if account['available'] >= money_need:
-        on_buy_frozen(account, money_need, db)
-        return True, ""
-    else:
-        return False, "账户资金不足"
-
-
-def position_verification(order: Order, db):
-    """订单持仓验证"""
-    pos_need = order.volume
-    result, pos = query_position_one(order.account_id, order.pt_symbol, db)
-
-    if result:
-        if pos['available'] >= pos_need:
-            on_sell_frozen(pos, order.volume, db)
             return True, ""
         else:
-            return False, "可用持仓不足"
-    else:
-        return False, "无可用持仓"
+            return False, "账户资金不足"
 
+    def __position_verification(self, order: Order):
+        """订单持仓验证"""
+        pos_need = order.volume
+        pos = self.pos.get(order.pt_symbol, None)
+        if pos:
+            if pos.available >= pos_need:
+                # 更新
+                avl_diff = pos.available - pos_need
+                self.pos[order.pt_symbol].available = avl_diff
 
-def on_buy_frozen(account, pay: float, db):
-    """买入资金冻结"""
-    available = account["available"] - pay
-    raw_data = {}
-    raw_data["flt"] = {'account_id': account["account_id"]}
-    raw_data["set"] = {'$set': {'available': available}}
-    db_data = DBData(
-        db_name=SETTINGS['ACCOUNT_DB'],
-        db_cl=account["account_id"],
-        raw_data=raw_data
-    )
-    return db.on_update(db_data)
+                # 推送股份冻结事件
+                self.__make_event(EVENT_POS_AVL_UPDATE, {
+                    "token": pos.account_id,
+                    "symbol": pos.pt_symbol,
+                    "avl": avl_diff
+                })
 
+                return True, ""
+            else:
+                return False, "可用持仓不足"
+        else:
+            return False, "无可用持仓"
 
-def on_sell_frozen(pos, vol: float, db):
-    """卖出证券冻结"""
-    available = pos["available"] - vol
-    raw_data = {}
-    raw_data["flt"] = {'pt_symbol': pos['pt_symbol']}
-    raw_data["set"] = {'$set': {'available': available}}
-    db_data = DBData(
-        db_name=SETTINGS['POSITION_DB'],
-        db_cl=pos["account_id"],
-        raw_data=raw_data
-    )
-    return db.on_update(db_data)
+    def __on_buy_cancel(self, order: Order):
+        """买入订单取消"""
+        pay = (order.volume - order.traded) * \
+              order.order_price * (1 + self.account.cost)
 
+        available = self.account.available + pay
 
-def on_order_cancel(token: str, order_id: str, db):
-    """取消订单"""
-    result, order = query_order_one(token, order_id, db)
-    if result:
-        order = order_generate(order)
-        order.status = Status.CANCELLED.value
-        on_order_refuse(order, db)
+        # 更新可用资金
+        self.account.available = available
 
+        # 推送资金解冻事件
+        self.__make_event(EVENT_ACCOUNT_AVL_UPDATE, {
+            'token': self.token,
+            'avl': available
+        })
 
-def on_order_refuse(order: Order, db):
-    """订单被拒绝"""
-    on_order_update(order, db)
+    def __on_sell_cancel(self, order: Order):
+        """卖出取消"""
+        pos = self.pos.get(order.pt_symbol)
+        available = pos.available + order.volume - order.traded
 
-    if order.order_type == OrderType.BUY.value:
-        return on_buy_cancel(order, db)
-    else:
-        return on_sell_cancel(order, db)
+        # 股份解冻
+        self.pos[order.pt_symbol].available = available
 
+        # 推送股份解冻事件
+        self.__make_event(EVENT_POS_AVL_UPDATE, {
+            "token": pos.account_id,
+            "symbol": pos.pt_symbol,
+            "avl": available
+        })
 
-def on_buy_cancel(order: Order, db):
-    """买入订单取消"""
-    token = order.account_id
-
-    # 查询账户信息
-    account = query_account_one(token, db)
-
-    pay = (order.volume - order.traded) * \
-        order.order_price * (1 + account['cost'])
-
-    available = account["available"] + pay
-    raw_data = {}
-    raw_data["flt"] = {'account_id': token}
-    raw_data["set"] = {'$set': {'available': available}}
-    db_data = DBData(
-        db_name=SETTINGS['ACCOUNT_DB'],
-        db_cl=token,
-        raw_data=raw_data
-    )
-    return db.on_update(db_data)
-
-
-def on_sell_cancel(order: Order, db):
-    """卖出取消"""
-    result, pos = query_position_one(order.account_id, order.pt_symbol, db)
-    available = pos["available"] + order.volume - order.traded
-    raw_data = {}
-    raw_data["flt"] = {'pt_symbol': pos["pt_symbol"]}
-    raw_data["set"] = {'$set': {'available': available}}
-    db_data = DBData(
-        db_name=SETTINGS['POSITION_DB'],
-        db_cl=pos["account_id"],
-        raw_data=raw_data
-    )
-    return db.on_update(db_data)
-
-
-"""清算操作"""
-
-
-def on_liquidation(db, token: str, check_date: str, price_dict: dict = None):
     """清算"""
-    # 更新所有持仓最新价格和冻结证券
-    on_position_liquidation(db, token, price_dict)
 
-    # 更新账户市值和冻结资金
-    on_account_liquidation(db, token)
+    def on_liquidation(self, liq_date: str, price_dict: dict = None):
+        """清算"""
+        # 更新所有持仓最新价格并冻结证券，并更新市值
+        self.__on_position_liquidation(price_dict)
 
-    # 账户记录
-    account_record_creat(token, check_date, db)
+        # 冻结资金
+        self.__on_account_liquidation()
 
-    return True
+        # 创建账户记录
+        account_daily = AccountRecord(
+            account_id=self.token,
+            check_date=liq_date,
+            assets=self.account.assets,
+            available=self.account.available,
+            market_value=self.account.market_value
+        )
+        df = pd.DataFrame(account_daily.__dict__, index=[liq_date])
+        self.account_record = self.account_record.append(df)
+
+        # 推送账户记录创建事件
+        self.__make_event(EVENT_ACCOUNT_RECORD_INSERT, account_daily)
+
+        return True
+
+    def __on_account_liquidation(self):
+        """账户清算"""
+        # 解除冻结
+        available = self.account.assets - self.account.market_value
+
+        # 更新账户可用资金
+        self.account.available = available
+
+        # 推送资金解冻事件
+        self.__make_event(EVENT_ACCOUNT_AVL_UPDATE, {
+            'token': self.token,
+            'avl': available
+        })
+
+    def __on_position_liquidation(self, price_dict: dict = None):
+        """持仓清算"""
+        for symbol in list(self.pos.keys()):
+            if price_dict:
+                pos = self.pos.get(symbol)
+                if pos.pt_symbol in price_dict.keys():
+                    # 更新最新价格并解除账户冻结
+                    new_price = price_dict.get(pos.pt_symbol)
+                    self.on_position_update_price(pos, new_price)
+
+            # 解除账户冻结
+            self.__on_position_frozen_cancel(symbol)
+
+
+"""数据对象生成器"""
+
+
+def account_generate(d: dict):
+    """订单生成器"""
+    account = Account(
+        account_id=d['account_id'],
+        assets=round(d['assets'], P),
+        available=round(d['available'], P),
+        market_value=round(d['market_value'], P),
+        capital=d['capital'],
+        cost=d['cost'],
+        tax=d['tax'],
+        slippoint=d['slippoint'],
+        account_info=d['account_info'],
+    )
+    return account
+
+
+def pos_generate(d: dict):
+    """订单生成器"""
+    pos = Position(
+        code=d['code'],
+        exchange=d['exchange'],
+        account_id=d['account_id'],
+        buy_date=d['buy_date'],
+        volume=d['volume'],
+        available=d['available'],
+        buy_price=d['buy_price'],
+        now_price=d['now_price'],
+        profit=d['profit']
+    )
+    return pos
 
 
 def new_order_generate(d: dict):
@@ -930,19 +722,29 @@ def cancel_order_generate(token ,order_id):
         raise ValueError("订单数据有误")
 
 
-def liq_order_generate(token ,symbol, price, check_date):
-    """清算订单生成器"""
-    try:
-        code, exchange = symbol.split('.')
-        order = Order(
-            code=code,
-            exchange=exchange,
-            account_id=token,
-            order_price=price,
-            order_type=OrderType.LIQ.value,
-            order_date=check_date
-        )
-        return order
-    except Exception:
-        raise ValueError("订单数据有误")
+def account_record_generate(d: dict):
+    """账户记录生成器"""
+    account_record = AccountRecord(
+        account_id=d['account_id'],
+        check_date=d['check_date'],
+        assets=d['assets'],
+        available=d['available'],
+        market_value=d['market_value']
+    )
+    return account_record
 
+def pos_record_generate(d: dict):
+    """持仓记录生成器"""
+    pos_record = PosRecord(
+        code=d['code'],
+        exchange=d['exchange'],
+        account_id=d['account_id'],
+        first_buy_date=d['first_buy_date'],
+        last_sell_date=d['last_sell_date'],
+        max_vol=d['max_vol'],
+        buy_price_mean=d['buy_price_mean'],
+        sell_price_mean=d['sell_price_mean'],
+        profit=d['profit'],
+        is_clear=d['is_clear']
+    )
+    return pos_record

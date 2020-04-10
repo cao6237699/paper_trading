@@ -11,6 +11,7 @@ import matplotlib as mpl
 import matplotlib.pyplot as plt
 from mpl_finance import candlestick_ohlc
 from matplotlib.pylab import date2num
+from matplotlib.dates import AutoDateLocator, DateFormatter
 
 
 # 超时时间
@@ -27,22 +28,27 @@ class PaperTrading():
         else:
             raise ConnectionError("地址或者端口不能为空")
 
-        # 连接模拟模拟市场
+        # 连接模拟市场
         result, msg = self.connect()
         if not result:
             raise ConnectionError(msg)
 
         if token:
-            self.__token = token
-        else:
-            status, new_token = self.creat(info)
+            # 账户登录
+            status, account = self.login(token)
             if status:
-                self.__token = new_token
+                # 账户绑定
+                self.account_bind(account)
             else:
-                raise ValueError(new_token)
-
-        # 账户绑定
-        self.account_bind()
+                raise ValueError("账户不存在")
+        else:
+            # 账户创建并登录
+            status, account = self.creat(info)
+            if status:
+                # 账户绑定
+                self.account_bind(account)
+            else:
+                raise ValueError(account)
 
     @property
     def token(self):
@@ -87,21 +93,27 @@ class PaperTrading():
 
         return wrapper
 
-    def account_bind(self):
+    def account_bind(self, account):
         """账户绑定"""
-        # 获取账户数据
-        status, account = self.account()
-
-        if status:
-            if isinstance(account, dict):
-                self.__capital = account['capital']
-                self.__cost = account['cost']
-                self.__tax = account['tax']
-                self.__slippoint = account['slippoint']
-            else:
-                raise ValueError(account)
+        if isinstance(account, dict):
+            self.__token = account['account_id']
+            self.__capital = account['capital']
+            self.__cost = account['cost']
+            self.__tax = account['tax']
+            self.__slippoint = account['slippoint']
         else:
             raise ValueError(account)
+
+    @url_request
+    def login(self, token: str):
+        """
+        登录账户
+        :return:(status, data)  正确时数据类型(bool, dict) 错误时数据类型(bool, str)
+        """
+        url = self.get_url("login")
+        data = {'token': token}
+        r = requests.post(url, data, timeout=MARKET_TIMEOUT)
+        return r
 
     @url_request
     def creat(self, info: dict):
@@ -118,10 +130,6 @@ class PaperTrading():
         info.encode("utf-8")
         data = {'info': info}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
-        if r.status_code == requests.codes.ok:
-            d = json.loads(r.text)
-            if d["status"]:
-                self.__token = d["data"]
 
         return r
 
@@ -244,6 +252,17 @@ class PaperTrading():
         return r
 
     @url_request
+    def data_persistance(self):
+        """
+        数据持久化
+        :return:
+        """
+        url = self.get_url("persistance")
+        data = {'token': self.__token}
+        r = requests.post(url, data, timeout=MARKET_TIMEOUT)
+        return r
+
+    @url_request
     def replenish_captial(self):
         """补充资本"""
         pass
@@ -254,14 +273,14 @@ class PaperTrading():
         pass
 
     @url_request
-    def account_record(self, start: str,end: str):
+    def account_record(self, start: str, end: str):
         """
         查询账户逐日记录数据
         :param start:数据开始日期
         :param end:数据结束日期
         :return:(status, data)  正确时数据类型(bool, list) 错误时数据类型(bool, str)
         """
-        url = self.get_url("account_line")
+        url = self.get_url("account_record")
         data = {'token': self.__token, 'start': start, 'end': end}
         r = requests.post(url, data, timeout=MARKET_TIMEOUT)
         return r
@@ -294,7 +313,7 @@ class PaperTrading():
                 assets_df = pd.DataFrame(assets_record)
                 # 计算net_pnl收益情况
                 assets_df['net_pnl'] = assets_df['assets'] - self.__capital
-
+                assets_df = assets_df[['check_date', 'assets', 'available', 'market_value', 'net_pnl', 'account_id']]
                 if save_data:
                     self.downloader(assets_df, start, end, "account.xls")
 
@@ -316,7 +335,7 @@ class PaperTrading():
         if status:
             if isinstance(pos_record, list):
                 pos_df = pd.DataFrame(pos_record)
-
+                pos_df = pos_df[['pt_symbol', 'max_vol', 'first_buy_date','last_sell_date', 'buy_price_mean', 'sell_price_mean', 'profit', 'is_clear', 'account_id']]
                 if save_data:
                     self.downloader(pos_df, start, end, "pos.xls")
 
@@ -353,6 +372,7 @@ class PaperTrading():
 
                     trade_df.loc[i, 'commission'] = commission
 
+                trade_df = trade_df[['order_date', 'order_time', 'pt_symbol', 'order_type', 'price_type', 'order_price', 'trade_price', 'volume', 'traded', 'status', 'commission', 'status', 'trade_type','account_id', 'error_msg']]
                 if save_data:
                     self.downloader(trade_df, start, end, "orders.xls")
 
@@ -373,7 +393,8 @@ class PaperTrading():
         loss_days = len(assets_df[assets_df["net_pnl"] < 0])
 
         end_balance = float(assets_df.iloc[-1].assets)
-        max_drawdown = round((assets_df['assets'].max() - assets_df['assets'].min()), 2)
+
+        max_drawdown = self.max_drapdown_cal(assets_df)
         max_ddpercent = round((max_drawdown / assets_df['assets'].max()) * 100, 2)
 
         total_net_pnl = round((end_balance - self.__capital), 2)
@@ -458,7 +479,6 @@ class PaperTrading():
 
         # 展示持仓记录
         pos_df = self.get_pos_record(start, end, save_data)
-        self.show_pos_record(pos_df)
 
         # 计算分析结果
         statistics_result = self.data_statistics(assets_df, pos_df, trade_df)
@@ -634,6 +654,31 @@ class PaperTrading():
             folder_path.mkdir()
 
         return folder_path.joinpath(file_name)
+
+    def max_drapdown_cal(self, assets_df):
+        """最大回撤计算"""
+        drawdown_list = list()
+        assets_list = list()
+        base_data = 0
+        for i, row in assets_df.iterrows():
+            # 资产增长
+            if base_data <= row['assets']:
+                if assets_list:
+                    assets_list.append(base_data)
+                    assets_list.sort()
+                    assets_diff = assets_list[-1] - assets_list[0]
+                    drawdown_list.append(assets_diff)
+                    assets_list.clear()
+                base_data = row['assets']
+            # 资产减少
+            else:
+                assets_list.append(row['assets'])
+
+        if drawdown_list:
+            drawdown_list.sort()
+            return drawdown_list[-1]
+        else:
+            return 0
 
     @staticmethod
     def output(msg):

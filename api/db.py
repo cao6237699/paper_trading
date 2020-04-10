@@ -70,6 +70,17 @@ class MongoDBService():
         except:
             raise OperationFailure("MongoDB数据库插入数据失败")
 
+    def on_insert_many(self, pt_db: DBData):
+        """数据库插入数据操作"""
+        try:
+            db = self.db_client[pt_db.db_name]
+            cl = db[pt_db.db_cl]
+            row = pt_db.raw_data['data']
+            cl.insert_many(row)
+            return True
+        except:
+            raise OperationFailure("MongoDB数据库插入数据失败")
+
     def on_replace_one(self, pt_db: DBData):
         """数据库插入数据操作"""
         try:

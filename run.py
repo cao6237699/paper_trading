@@ -4,7 +4,7 @@ import sys
 from paper_trading.config import config
 from paper_trading.app import creat_app
 from paper_trading.trade.pt_engine import MainEngine
-from paper_trading.utility.constant import ConfigType
+from paper_trading.utility.constant import ConfigType, PersistanceMode, LoadDataMode
 from paper_trading.trade.market import (
     BacktestMarket,
     ChinaAMarket
@@ -16,6 +16,11 @@ def main():
     param = dict()
     market = None
 
+    # 持久化参数， 默认实时模式
+    param['PERSISTENCE_MODE'] = PersistanceMode.REALTIME
+    # 数据加载参数，默认交易模式
+    param['LOAD_DATA_MODE'] = LoadDataMode.TRADING
+
     # 模拟交易flask配置参数
     config_name = ConfigType.DEFAULT.value
 
@@ -23,9 +28,13 @@ def main():
     if len(sys.argv) > 1:
         if sys.argv[1] == "test":
             market = BacktestMarket
+            param['PERSISTENCE_MODE'] = PersistanceMode.MANUAL
+            param['LOAD_DATA_MODE'] = LoadDataMode.BACKTEST
             config_name = ConfigType.TESTING.value
         elif sys.argv[1] == "dev":
             market = BacktestMarket
+            param['PERSISTENCE_MODE'] = PersistanceMode.MANUAL
+            param['LOAD_DATA_MODE'] = LoadDataMode.BACKTEST
             config_name = ConfigType.DEVELOPMENT.value
 
     param['MONGO_HOST'] = config[config_name].MONGO_HOST

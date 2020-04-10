@@ -13,20 +13,7 @@ from paper_trading.utility.event import (
     EVENT_LOG,
     EVENT_MARKET_CLOSE
 )
-from paper_trading.utility.setting import SETTINGS
-from paper_trading.api.pytdx_api import PYTDXService
-from paper_trading.trade.account import (
-    on_order_deal,
-    on_order_cancel,
-    on_order_refuse,
-    order_generate,
-    query_orders_today,
-    query_account_list,
-    query_position,
-    on_position_update_price,
-    on_liquidation
-)
-from paper_trading.utility.model import Order, DBData, Status, LogData
+from paper_trading.utility.model import Order, Status, LogData
 from paper_trading.utility.constant import OrderType, PriceType, TradeType
 
 
@@ -37,26 +24,28 @@ class Exchange:
     2、必须重写on_match、on_orders_arrived，verification_register
     """
 
-    def __init__(self, event_engine):
-        self.market_name = ""              # 市场名称
-        self._active = False
-        self.event_engine = event_engine   # 事件引擎
+    def __init__(self, event_engine, account_engine, hq_ser, param):
+        self.market_name = ""               # 市场名称
+        self._active = False                # 市场状态标识
+        self.orders_book = OrderedDict()    # 订单薄用于成交撮合
 
-        self.hq_client = None              # 行情源
-        self.db = None                     # 数据库实例
-        self.period = SETTINGS["PERIOD"]   # 撮合效率，单位秒
-        self.exchange_symbols = []         # 交易市场标识
-        self.turnover_mode = None          # 回转交易模式
-        self.verification = OrderedDict()  # 验证清单
-        self.orders_book = OrderedDict()   # 订单薄
+        # 事件引擎
+        self.event_engine = event_engine
+
+        # 账户引擎
+        self.account_engine = account_engine
+
+        # 行情源实例
+        self.hq_client = hq_ser
+
+        self.exchange_symbols = []          # 交易市场标识
+        self.turnover_mode = None           # 回转交易模式
+        self.verification = OrderedDict()   # 订单验证清单
 
     def on_init(self):
         """初始化"""
         # 开启交易撮合开关
         self._active = True
-
-        # 绑定交易市场名称，用于订单薄接收订单
-        SETTINGS["MARKET_NAME"] = self.market_name
 
         # 注册验证程序
         self.verification_register()
@@ -64,7 +53,7 @@ class Exchange:
         # 返回订单接收函数
         return self.on_orders_arrived
 
-    def on_match(self, db):
+    def on_match(self):
         """订单撮合"""
         pass
 
@@ -124,45 +113,33 @@ class Exchange:
         order.traded = order.volume
         order.trade_type = self.turnover_mode
 
-        on_order_deal(order, self.db)
+        self.account_engine.orders_deal(order)
 
-    def on_order_status_modify(self, order):
-        """更新订单信息"""
-        raw_data = {}
-        raw_data['flt'] = {'order_id': order.order_id}
-        raw_data["set"] = {'$set': {'status': order.status}}
-        db_data = DBData(
-            db_name=SETTINGS['TRADE_DB'],
-            db_cl=self.market_name,
-            raw_data=raw_data
-        )
+    def on_order_cancel(self, order: Order):
+        """订单被取消"""
+        self.account_engine.orders_cancel(order)
 
-        return self.db.on_update(db_data)
+    def on_order_refused(self, order: Order):
+        """订单被拒单"""
+        self.account_engine.orders_refused(order)
 
-    def load_orders_today(self):
-        """查询当日未成交的订单"""
-        account_list = query_account_list(self.db)
+    def on_order_status_update(self, order: Order):
+        """订单状态变化"""
+        self.account_engine.orders_status_update(order)
 
-        for account_id in account_list:
-            orders = query_orders_today(account_id, self.db)
-            if isinstance(orders, list):
-                for order in orders:
-                    if order['status'] in [ Status.SUBMITTING.value,
-                                            Status.NOTTRADED.value,
-                                            Status.PARTTRADED.value]:
-                        order = order_generate(order)
-                        self.orders_book[order.order_id] = order
-
+    def load_data(self):
+        """加载订单"""
+        orders_book = self.account_engine.load_data()
+        self.orders_book.update(orders_book)
         self.write_log(f"加载未处理订单共计：{str(len(self.orders_book))}条")
 
-    def on_rejected_all(self):
+    def on_refused_all(self):
         """拒绝所有订单"""
         if self.orders_book:
             for order in self.orders_book.values():
                 order.status = Status.REJECTED.value
                 order.error_msg = "交易关闭，自动拒单"
-
-                on_order_refuse(order, self.db)
+                self.on_order_refused(order)
 
                 self.write_log(
                     "处理订单：账户：{}, 订单号：{}, 结果：{}".format(
@@ -170,35 +147,21 @@ class Exchange:
                         order.order_id,
                         order.error_msg))
 
+        self.orders_book.clear()
+
     def liquidation(self):
         """收盘清算"""
-        tokens = query_account_list(self.db)
-        today = datetime.now().strftime("%Y%m%d")
+        self.account_engine.liquidation(self.hq_client)
 
-        if tokens:
-            for token in tokens:
-                pos_list = query_position(token, self.db)
-                if isinstance(pos_list, list):
-                    for pos in pos_list:
-                        hq = self.hq_client.get_realtime_data(pos["pt_symbol"])
-                        if hq is not None:
-                            now_price = float(hq.loc[0, "price"])
-                            # 更新收盘行情
-                            on_position_update_price(token, pos, now_price, self.db)
-                # 清算
-                on_liquidation(self.db, token, today)
         self.write_log("{}: 账户与持仓清算完成".format(self.market_name))
 
     def on_close(self):
         """模拟交易市场关闭"""
-        # 阻止接收新订单
-        SETTINGS["MARKET_NAME"] = ""
-
         # 关闭市场撮合
         self._active = False
 
         # 模拟交易结束，拒绝所有未成交的订单
-        self.on_rejected_all()
+        self.on_refused_all()
 
         # 清算
         self.liquidation()
@@ -225,7 +188,7 @@ class Exchange:
             "2": (time(13, 0), time(15, 0))
         }
         for k, time_check in time_dict.items():
-            if (now >= time_check[0] and now <= time_check[1]):
+            if (now >= time_check[0]) and (now <= time_check[1]):
                 result = True
 
         if now >= time(15, 0):
@@ -253,8 +216,7 @@ class Exchange:
             if not result:
                 order.status = Status.REJECTED.value
                 order.error_msg = msg
-                on_order_refuse(order, self.db)
-
+                self.on_order_refused(order)
                 self.write_log(
                     "处理订单：账户：{}, 订单号：{}, 结果：{}".format(
                         order.account_id, order.order_id, msg))
@@ -281,16 +243,15 @@ class BacktestMarket(Exchange):
     3、为保证数据准确，使用订单队列接收和处理订单
     """
 
-    def __init__(self, event_engine):
-        super(BacktestMarket, self).__init__(event_engine)
+    def __init__(self, event_engine, account_engine, hq_ser, param):
+        super(BacktestMarket, self).__init__(event_engine, account_engine, hq_ser, param)
 
         self.market_name = "backtest_market"            # 交易市场名称
         self.turnover_mode = TradeType.T_PLUS1.value    # 交收类型
         self.orders_queue = Queue()                     # 使用订单队列
 
-    def on_match(self, db):
+    def on_match(self):
         """交易撮合"""
-        self.db = db
         self.write_log("{}：交易市场已开启".format(self.market_name))
 
         try:
@@ -299,16 +260,6 @@ class BacktestMarket(Exchange):
                     continue
 
                 order = self.orders_queue.get(block=True)
-
-                # 模拟清算
-                if order.order_type == OrderType.LIQ.value:
-                    on_liquidation(
-                        self.db,
-                        order.account_id,
-                        order.order_date,
-                        {order.pt_symbol: order.order_price}
-                    )
-                    continue
 
                 # 订单成交
                 # 回测使用委托价格作为成交价格
@@ -325,7 +276,7 @@ class BacktestMarket(Exchange):
         if order.order_type == OrderType.CANCEL.value:
             return False
 
-        # 订单验证
+        # 后端订单验证
         if not self.on_back_verification(order):
             return False
 
@@ -336,24 +287,22 @@ class BacktestMarket(Exchange):
 class ChinaAMarket(Exchange):
     """中国A股交易市场"""
 
-    def __init__(self, event_engine):
-        super(ChinaAMarket, self).__init__(event_engine)
+    def __init__(self, event_engine, account_engine, hq_ser, param):
+        super(ChinaAMarket, self).__init__(event_engine, account_engine, hq_ser, param)
 
         self.market_name = "china_a_market"            # 交易市场名称
-        self.hq_client = PYTDXService()                # 行情源
         self.exchange_symbols = ["SH", "SZ"]           # 交易市场标识
         self.turnover_mode = TradeType.T_PLUS1.value   # 回转交易模式
 
-    def on_match(self, db):
+    def on_match(self):
         """交易撮合"""
-        self.db = db
         self.write_log("{}：交易市场已开启".format(self.market_name))
         try:
             # 行情连接
             self.hq_client.connect_api()
 
-            # 加载当日未成交的订单
-            self.load_orders_today()
+            # 加载数据
+            self.load_data()
 
             while self._active:
                 # 交易时间检验
@@ -383,7 +332,7 @@ class ChinaAMarket(Exchange):
         if order.order_type == OrderType.CANCEL.value:
             if self.orders_book.get(order_id):
                 del self.orders_book[order_id]
-                on_order_cancel(order.account_id, order_id, self.db)
+                self.on_order_cancel(order)
                 return True
             else:
                 return False
@@ -391,14 +340,13 @@ class ChinaAMarket(Exchange):
         elif order.order_type == OrderType.LIQ.value:
             return False
         else:
-            # 订单验证
+            # 后端订单验证
             if not self.on_back_verification(order):
-                # 验证失败拒单
-                on_order_refuse(order, self.db)
+                return False
             else:
                 # 更新订单状态及信息
                 order.status = Status.NOTTRADED.value
-                self.on_order_status_modify(order)
+                self.on_order_status_update(order)
                 self.write_log(f"收到订单:{order_id}")
                 # 将订单添加到订单薄
                 self.orders_book[order_id] = order

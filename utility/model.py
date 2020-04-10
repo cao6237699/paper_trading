@@ -42,7 +42,7 @@ class Account(BaseData):
     capital: float = 0       # 初始资金
     cost: float = 0          # 佣金
     tax: float = 0           # 税金
-    slippoint: float = 0      # 滑点
+    slippoint: float = 0     # 滑点
     account_info: str = ""   # 账户描述信息
 
 

@@ -144,7 +144,7 @@
 				info_json = JSON.stringify(account_info);
 
 				$.post('/creat',{info:info_json}, function (data, status) {
-					alert(data.data)
+					alert(data.data.account_id)
 				}, 'json')
 			});
 
