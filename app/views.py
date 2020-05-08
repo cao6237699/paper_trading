@@ -17,7 +17,7 @@ from paper_trading.trade.db_model import (
     query_account_list,
     query_orders_by_symbol,
     query_order_status,
-)
+    query_order_one)
 
 # 主引擎
 main_engine = None
@@ -288,12 +288,18 @@ def order_cancel():
         if request.form.get("order_id"):
             token = request.form["token"]
             order_id = request.form["order_id"]
-            order = cancel_order_generate(token, order_id)
-            if main_engine.order_put(order):
-                rps['data'] = "撤单成功"
-            else:
+            result, order = query_order_one(
+                token, order_id, db)
+            if not result:
                 rps['status'] = False
-                rps['data'] = "撤单失败"
+                rps['data'] = "查询订单失败"
+            else:
+                order = cancel_order_generate(token, order_id, code=order["code"], exchange=order["exchange"])
+                if main_engine.order_put(order):
+                    rps['data'] = "撤单成功"
+                else:
+                    rps['status'] = False
+                    rps['data'] = "撤单失败"
         else:
             rps['status'] = False
             rps['data'] = "请求参数错误"

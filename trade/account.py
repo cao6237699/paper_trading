@@ -707,15 +707,15 @@ def order_generate(d: dict):
         raise ValueError("订单数据有误")
 
 
-def cancel_order_generate(token ,order_id):
+def cancel_order_generate(token, order_id, *, code=None, exchange=None):
     """撤销订单生成器"""
     try:
         order = Order(
-            code="",
-            exchange="",
+            code=code,
+            exchange=exchange,
             account_id=token,
             order_id=order_id,
-            order_type=OrderType.CANCEL.value
+            order_type=OrderType.CANCEL.value,
         )
         return order
     except Exception:
