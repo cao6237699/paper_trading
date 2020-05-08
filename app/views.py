@@ -264,7 +264,7 @@ def order_arrived():
             if result:
                 # 将订单送入交易引擎
                 main_engine.order_put(msg)
-                rps['data'] = msg.order_id
+                rps['data'] = {"order_id": msg.order_id}
             else:
                 rps['status'] = False
                 rps['data'] = msg
