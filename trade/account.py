@@ -52,6 +52,7 @@ class Trader:
 
         self.pos = dict()                           # 持仓数据
         self.orders = dict()                        # 订单数据
+        self.orders_today = dict()                  # 今日订单数据
         self.account_record = pd.DataFrame()        # 账户记录
         self.pos_record = pd.DataFrame()            # 持仓记录
 
@@ -72,6 +73,7 @@ class Trader:
         # 交易模式：加载当前持仓，当日的订单及未清仓的持仓记录
         elif load_data_mode == LoadDataMode.TRADING:
             self.__load_pos(db)
+            self.__load_orders(db)
             self.__load_today_orders(db)
             self.__load_pos_records_not_clear(db)
         else:
@@ -99,7 +101,7 @@ class Trader:
         if isinstance(data, list):
             for d in data:
                 order = order_generate(d)
-                self.orders[order.order_id] = order
+                self.orders_today[order.order_id] = order
 
     def __load_account_records(self, db):
         """加载账户记录"""

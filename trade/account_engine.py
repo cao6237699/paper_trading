@@ -231,7 +231,7 @@ class AccountEngine():
         trader = self.trader_dict.get(token, None)
         if trader:
             orders = list()
-            for d in trader.orders.values():
+            for d in trader.orders_today.values():
                 orders.append(d.__dict__)
 
             if orders:
