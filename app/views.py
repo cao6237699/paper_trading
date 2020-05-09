@@ -17,7 +17,7 @@ from paper_trading.trade.db_model import (
     query_account_list,
     query_orders_by_symbol,
     query_order_status,
-    query_order_one)
+    query_order_one, query_orders)
 
 # 主引擎
 main_engine = None
@@ -221,9 +221,15 @@ def orders_query():
 
     if request.form.get("token"):
         token = request.form["token"]
-        status, orders = account_engine.query_orders(token)
+        try:
+            data = query_orders(token, db)
+        except Exception as e:
+            status = False
+            data = "查询订单失败"
+        else:
+            status = True
         rps['status'] = status
-        rps['data'] = orders
+        rps['data'] = data
     else:
         rps['status'] = False
         rps['data'] = "请求参数错误"
