@@ -99,7 +99,7 @@ class MainEngine():
         self.account_engine.start()
 
         # 默认使用ChinaAMarket
-        if not self._market:
+        if not self._market or isinstance(self._market, ChinaAMarket):
             self._market = ChinaAMarket(self.event_engine,
                                         self.account_engine,
                                         hq_client,
@@ -114,6 +114,7 @@ class MainEngine():
         self.order_put = self._market.on_init()
 
         # 启动订单薄撮合程序
+        self._thread = Thread(target=self._run)
         self._thread.start()
         self.__active = True
 
