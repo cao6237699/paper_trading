@@ -224,7 +224,7 @@ def orders_query():
         start_date = request.form["start_date"]
         end_date = request.form["end_date"]
         try:
-            flt = {"order_date": {"$in": [start_date, end_date]}}
+            flt = {"order_date": {"$gte": start_date, "$lte": end_date}}
             data = query_orders(token, db, flt)
         except Exception as e:
             status = False
