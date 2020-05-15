@@ -221,8 +221,11 @@ def orders_query():
 
     if request.form.get("token"):
         token = request.form["token"]
+        start_date = request.form["start_date"]
+        end_date = request.form["end_date"]
         try:
-            data = query_orders(token, db)
+            flt = {"order_date": {"$in": [start_date, end_date]}}
+            data = query_orders(token, db, flt)
         except Exception as e:
             status = False
             data = "查询订单失败"
