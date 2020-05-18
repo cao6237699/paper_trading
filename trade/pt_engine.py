@@ -114,6 +114,55 @@ class MainEngine():
         self.order_put = self._market.on_init()
 
         # 启动订单薄撮合程序
+        self._thread.start()
+        self.__active = True
+
+        return self
+
+    def restart(self):
+        """引擎初始化"""
+        self.write_log("模拟交易主引擎：启动")
+
+        # 引擎工作参数检查
+        self._param_check()
+
+        # 持久化配置
+        if self._settings['PERSISTENCE_MODE'] == PersistanceMode.REALTIME:
+            self.pst_active = True
+        elif self._settings['PERSISTENCE_MODE'] == PersistanceMode.MANUAL:
+            self.pst_active = False
+        else:
+            raise ValueError("持久化参数错误")
+
+        # 连接数据库
+        db = self.creat_db()
+
+        # 连接行情
+        hq_client = self.creat_hq_api()
+
+        # 账户引擎启动
+        self.account_engine = AccountEngine(self.event_engine,
+                                            self.pst_active,
+                                            self._settings['LOAD_DATA_MODE'],
+                                            db)
+        self.account_engine.start()
+
+        # 默认使用ChinaAMarket
+        if not self._market or isinstance(self._market, ChinaAMarket):
+            self._market = ChinaAMarket(self.event_engine,
+                                        self.account_engine,
+                                        hq_client,
+                                        {})
+        else:
+            self._market = self._market(self.event_engine,
+                                        self.account_engine,
+                                        hq_client,
+                                        {})
+
+        # 交易市场初始化，并返回订单推送函数
+        self.order_put = self._market.on_init()
+
+        # 启动订单薄撮合程序
         self._thread = Thread(target=self._run)
         self._thread.start()
         self.__active = True
