@@ -221,10 +221,13 @@ def orders_query():
 
     if request.form.get("token"):
         token = request.form["token"]
-        start_date = request.form["start_date"]
-        end_date = request.form["end_date"]
-        try:
+        start_date = request.form.get("start_date")
+        end_date = request.form.get("end_date")
+        if start_date and end_date:
             flt = {"order_date": {"$gte": start_date, "$lte": end_date}}
+        else:
+            flt = {}
+        try:
             data = query_orders(token, db, flt)
         except Exception as e:
             status = False
