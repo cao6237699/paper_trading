@@ -235,7 +235,7 @@ def orders_query():
         else:
             status = True
         rps['status'] = status
-        rps['data'] = data
+        rps['data'] = data or []
     else:
         rps['status'] = False
         rps['data'] = "请求参数错误"
