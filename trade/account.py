@@ -193,7 +193,7 @@ class Trader:
             'msg': order.error_msg
         })
 
-        if order.order_type == OrderType.BUY.value:
+        if self.orders[order.order_id].order_type == OrderType.BUY.value:
             return self.__on_buy_cancel(order)
         else:
             return self.__on_sell_cancel(order)
