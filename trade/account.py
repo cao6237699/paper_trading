@@ -194,9 +194,9 @@ class Trader:
         })
 
         if self.orders[order.order_id].order_type == OrderType.BUY.value:
-            return self.__on_buy_cancel(order)
+            return self.__on_buy_cancel(self.orders[order.order_id])
         else:
-            return self.__on_sell_cancel(order)
+            return self.__on_sell_cancel(self.orders[order.order_id])
 
     def on_order_status_update(self, order: Order):
         """更新订单状态信息"""
