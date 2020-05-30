@@ -272,10 +272,10 @@ def on_order_status_update(data, db):
     return db.on_update(db_data)
 
 
-def query_orders(token: str, db):
+def query_orders(token: str, db, flt: dict = None):
     """查询交割单"""
     raw_data = {}
-    raw_data["flt"] = {}
+    raw_data["flt"] = flt or {}
     db_data = DBData(
         db_name=SETTINGS['TRADE_DB'],
         db_cl=token,

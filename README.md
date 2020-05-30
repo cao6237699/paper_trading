@@ -1,5 +1,9 @@
 # Paper Trading
 
+## 2020年5月12日更新
+1、统一接口返回格式：查询持仓为空时返回空列表；下单成功返回数据结构设置为字典格式
+2、订单撤单bug处理：构造order对象时将股票代码和市场信息传入方便后续逻辑的正常进行
+3、交易模式：历史订单从数据库查询
 
 ![image](https://github.com/cao6237699/paper_trading/blob/master/data_flow.jpg)
 

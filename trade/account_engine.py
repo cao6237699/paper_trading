@@ -222,7 +222,7 @@ class AccountEngine():
                 pos_data = [d.__dict__ for d in pos.values()]
                 return True, pos_data
             else:
-                return True, "无持仓"
+                return True, []
         else:
             return False, "账户未登录"
 

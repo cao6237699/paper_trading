@@ -17,7 +17,7 @@ from paper_trading.trade.db_model import (
     query_account_list,
     query_orders_by_symbol,
     query_order_status,
-)
+    query_order_one, query_orders)
 
 # 主引擎
 main_engine = None
@@ -221,9 +221,21 @@ def orders_query():
 
     if request.form.get("token"):
         token = request.form["token"]
-        status, orders = account_engine.query_orders(token)
+        start_date = request.form.get("start_date")
+        end_date = request.form.get("end_date")
+        if start_date and end_date:
+            flt = {"order_date": {"$gte": start_date, "$lte": end_date}}
+        else:
+            flt = {}
+        try:
+            data = query_orders(token, db, flt)
+        except Exception as e:
+            status = False
+            data = "查询订单失败"
+        else:
+            status = True
         rps['status'] = status
-        rps['data'] = orders
+        rps['data'] = data or []
     else:
         rps['status'] = False
         rps['data'] = "请求参数错误"
@@ -264,7 +276,7 @@ def order_arrived():
             if result:
                 # 将订单送入交易引擎
                 main_engine.order_put(msg)
-                rps['data'] = msg.order_id
+                rps['data'] = {"order_id": msg.order_id}
             else:
                 rps['status'] = False
                 rps['data'] = msg
@@ -288,12 +300,18 @@ def order_cancel():
         if request.form.get("order_id"):
             token = request.form["token"]
             order_id = request.form["order_id"]
-            order = cancel_order_generate(token, order_id)
-            if main_engine.order_put(order):
-                rps['data'] = "撤单成功"
-            else:
+            result, order = query_order_one(
+                token, order_id, db)
+            if not result:
                 rps['status'] = False
-                rps['data'] = "撤单失败"
+                rps['data'] = "查询订单失败"
+            else:
+                order = cancel_order_generate(token, order_id, code=order["code"], exchange=order["exchange"])
+                if main_engine.order_put(order):
+                    rps['data'] = "撤单成功"
+                else:
+                    rps['status'] = False
+                    rps['data'] = "撤单失败"
         else:
             rps['status'] = False
             rps['data'] = "请求参数错误"

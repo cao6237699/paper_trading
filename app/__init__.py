@@ -2,6 +2,7 @@ from flask import Flask
 from datetime import timedelta
 
 from paper_trading.config import config
+from paper_trading.tasks.base import init_tasks
 from .views import init_blue
 
 
@@ -15,5 +16,6 @@ def creat_app(config_name: str, engine):
 
     # 注册蓝本
     init_blue(app, engine)
-
+    # 注册定时任务
+    init_tasks(app, engine)
     return app

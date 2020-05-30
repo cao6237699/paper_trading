@@ -52,6 +52,7 @@ class Trader:
 
         self.pos = dict()                           # 持仓数据
         self.orders = dict()                        # 订单数据
+        self.orders_today = dict()                  # 今日订单数据
         self.account_record = pd.DataFrame()        # 账户记录
         self.pos_record = pd.DataFrame()            # 持仓记录
 
@@ -192,10 +193,10 @@ class Trader:
             'msg': order.error_msg
         })
 
-        if order.order_type == OrderType.BUY.value:
-            return self.__on_buy_cancel(order)
+        if self.orders[order.order_id].order_type == OrderType.BUY.value:
+            return self.__on_buy_cancel(self.orders[order.order_id])
         else:
-            return self.__on_sell_cancel(order)
+            return self.__on_sell_cancel(self.orders[order.order_id])
 
     def on_order_status_update(self, order: Order):
         """更新订单状态信息"""
@@ -707,15 +708,15 @@ def order_generate(d: dict):
         raise ValueError("订单数据有误")
 
 
-def cancel_order_generate(token ,order_id):
+def cancel_order_generate(token, order_id, *, code=None, exchange=None):
     """撤销订单生成器"""
     try:
         order = Order(
-            code="",
-            exchange="",
+            code=code,
+            exchange=exchange,
             account_id=token,
             order_id=order_id,
-            order_type=OrderType.CANCEL.value
+            order_type=OrderType.CANCEL.value,
         )
         return order
     except Exception:
